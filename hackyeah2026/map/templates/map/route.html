@@ -1018,10 +1018,10 @@
                         <div class="step-warning">
                             <span>⚠️ ${step.warning}</span>
                             <div style="display: flex; gap: 4px;">
-                                <button class="btn-exclude-small" style="background: rgba(255,184,108,0.2); color: var(--orange); border-color: var(--orange);" onclick="event.stopPropagation(); highlightStepOnMap(${JSON.stringify(step).replace(/"/g, '&quot;')}, this.closest('.step-item'))">
+                                <button class="btn-exclude-small btn-show-barrier" style="background: rgba(255,184,108,0.2); color: var(--orange); border-color: var(--orange);">
                                     🔍 Pokaż barierę
                                 </button>
-                                <button class="btn-exclude-small" onclick="excludeEdges(event, ${JSON.stringify(step.edge_ids)})">
+                                <button class="btn-exclude-small btn-exclude-step">
                                     ⛔ Wyklucz
                                 </button>
                             </div>
@@ -1045,6 +1045,22 @@
                 item.addEventListener('click', () => {
                     highlightStepOnMap(step, item);
                 });
+
+                const showBtn = item.querySelector('.btn-show-barrier');
+                if (showBtn) {
+                    showBtn.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        highlightStepOnMap(step, item);
+                    });
+                }
+
+                const excludeBtn = item.querySelector('.btn-exclude-step');
+                if (excludeBtn) {
+                    excludeBtn.addEventListener('click', (evt) => {
+                        evt.stopPropagation();
+                        excludeEdges(evt, step.edge_ids);
+                    });
+                }
 
                 container.appendChild(item);
             });

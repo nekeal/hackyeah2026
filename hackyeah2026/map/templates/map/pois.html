@@ -622,7 +622,7 @@
     let markersLayer = L.layerGroup().addTo(map);
 
     async function loadData() {
-        const resp = await fetch('/map/api/pois/');
+        const resp = await fetch('{% url "map:pois_geojson" %}');
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         return resp.json();
     }
