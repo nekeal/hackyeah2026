@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kraków Bez Barier - Mapa Nawierzchni</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        :root {
+            --bg-dark: #1e1e2e;
+            --panel-bg: #282a36;
+            --text-light: #f8f8f2;
+            --accent: #bd93f9;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+        }
+
+        #sidebar {
+            width: 320px;
+            background-color: var(--panel-bg);
+            padding: 20px;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
+            z-index: 1000;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        #map {
+            flex-grow: 1;
+            height: 100%;
+        }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-top: 0;
+            color: var(--accent);
+            border-bottom: 2px solid #44475a;
+            padding-bottom: 10px;
+        }
+
+        .filter-group {
+            background: #44475a;
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .filter-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 1.1rem;
+        }
+
+        .filter-group label {
+            display: block;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 0.95rem;
+        }
+
+        .filter-group input[type="checkbox"] {
+            margin-right: 10px;
+            accent-color: var(--accent);
+            transform: scale(1.2);
+        }
+
+        .legend-color {
+            display: inline-block;
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        .c-good { background-color: #50fa7b; }
+        .c-medium { background-color: #f1fa8c; }
+        .c-bad { background-color: #ff5555; }
+        .c-unknown { background-color: #8be9fd; }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.7);
+            border-radius: 5px;
+            margin-top: 20px;
+            color: #50fa7b;
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div id="sidebar">
+        <h1>Kraków Bez Barier</h1>
+        <p>Eksplorator nawierzchni wygenerowany w oparciu o graf pieszy OSM.</p>
+        
+        <button id="loadDataBtn" style="padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; font-weight: bold;">
+            Wczytaj Sieć 3D
+        </button>
+
+        <div id="loader" class="loader">Pobieranie i renderowanie geojson...</div>
+
+        <div class="filter-group">
+            <h3>Widoczność Nawierzchni</h3>
+            <label>
+                <input type="checkbox" class="surface-filter" value="good" checked>
+                <span class="legend-color c-good"></span> Gładkie / Utwardzone
+            </label>
+            <label>
+                <input type="checkbox" class="surface-filter" value="medium" checked>
+                <span class="legend-color c-medium"></span> Wyboiste / Nierówne
+            </label>
+            <label>
+                <input type="checkbox" class="surface-filter" value="bad" checked>
+                <span class="legend-color c-bad"></span> Przeszkody / Piach / Bruk
+            </label>
+            <label>
+                <input type="checkbox" class="surface-filter" value="unknown" checked>
+                <span class="legend-color c-unknown"></span> Brak danych (nieznane)
+            </label>
+        </div>
+
+        <div style="font-size: 0.8rem; color: #6272a4; margin-top: auto;">
+            Wykorzystuje lokalny plik roads_3d.geojson wyciągnięty przez osmnx & pyrosm.
+        </div>
+    </div>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        // Inicjalizacja Mapy
+        const map = L.map('map').setView([50.0614, 19.9365], 14); // Kraków Centrum
+
+        // Ciemny motyw kafelków (CartoDB Dark Matter)
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 20
+        }).addTo(map);
+
+        // Klasyfikacja nawierzchni
+        const surfacesGood = ['asphalt', 'paving_stones', 'paved', 'concrete', 'compacted', 'concrete:plates'];
+        const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'sett', 'fine_gravel', 'grass_paver'];
+        const surfacesBad = ['pebblestone', 'sand', 'mud', 'cobblestone', 'unhewn_cobblestone', 'metal_grid', 'stepping_stones'];
+
+        let geojsonLayer = null;
+        let roadsData = null;
+
+        function getCategory(surface) {
+            if (!surface || surface === "nan") return "unknown";
+            surface = surface.toLowerCase();
+            if (surfacesGood.includes(surface)) return "good";
+            if (surfacesMedium.includes(surface)) return "medium";
+            if (surfacesBad.includes(surface)) return "bad";
+            return "unknown"; // domyslnie reszta jako nieznane
+        }
+
+        function getColor(category) {
+            switch(category) {
+                case 'good': return '#50fa7b';
+                case 'medium': return '#f1fa8c';
+                case 'bad': return '#ff5555';
+                default: return '#8be9fd';
+            }
+        }
+
+        function renderMap() {
+            if (!roadsData) return;
+
+            // Zbierz zaznaczone filtry
+            const activeFilters = Array.from(document.querySelectorAll('.surface-filter'))
+                .filter(cb => cb.checked)
+                .map(cb => cb.value);
+
+            if (geojsonLayer) {
+                map.removeLayer(geojsonLayer);
+            }
+
+            geojsonLayer = L.geoJSON(roadsData, {
+                style: function (feature) {
+                    const surface = feature.properties.surface;
+                    const cat = getCategory(surface);
+                    return {
+                        color: getColor(cat),
+                        weight: cat === 'bad' ? 4 : 2,
+                        opacity: 0.8
+                    };
+                },
+                filter: function (feature) {
+                    const cat = getCategory(feature.properties.surface);
+                    return activeFilters.includes(cat);
+                },
+                onEachFeature: function (feature, layer) {
+                    let popupContent = `<b>Kategoria:</b> ${getCategory(feature.properties.surface)}<br/>`;
+                    popupContent += `<b>Nawierzchnia (OSM):</b> ${feature.properties.surface || 'brak'}<br/>`;
+                    popupContent += `<b>Nachylenie:</b> ${(feature.properties.grade * 100).toFixed(1)}%<br/>`;
+                    if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;
+                    layer.bindPopup(popupContent);
+                }
+            }).addTo(map);
+        }
+
+        // Obsługa wczytywania danych
+        document.getElementById('loadDataBtn').addEventListener('click', async () => {
+            const btn = document.getElementById('loadDataBtn');
+            const loader = document.getElementById('loader');
+            
+            btn.style.display = 'none';
+            loader.style.display = 'block';
+
+            try {
+                // Ścieżka skonfigurowana w Django
+                const response = await fetch('/map/api/roads/');
+                if (!response.ok) throw new Error("Brak pliku na serwerze");
+                
+                roadsData = await response.json();
+                renderMap();
+                
+                loader.style.display = 'none';
+            } catch (e) {
+                loader.textContent = 'Błąd wczytywania danych: ' + e.message;
+                loader.style.color = '#ff5555';
+            }
+        });
+
+        // Nasłuchiwanie checkboxów
+        document.querySelectorAll('.surface-filter').forEach(cb => {
+            cb.addEventListener('change', renderMap);
+        });
+
+    </script>
+</body>
+</html>

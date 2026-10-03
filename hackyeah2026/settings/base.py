@@ -35,6 +35,7 @@ THIRD_PARTY_APPS = [
 
 LOCAL_APPS = [
     "hackyeah2026.accounts.apps.AccountsConfig",
+    "hackyeah2026.map.apps.MapConfig",
 ]
 
 INSTALLED_APPS = DJANGO_APPS + THIRD_PARTY_APPS + LOCAL_APPS
