@@ -18,14 +18,8 @@ This is project developed as part of hackyeah 2026
 
 ## Native way with virtualenv
 
-First create postgresql database:
-
-```sql
-create user hackyeah2026 with createdb;
-alter user hackyeah2026 password 'hackyeah2026';
-create database hackyeah2026 owner hackyeah2026;
-```
-Now you can setup virtualenv and django:
+The local settings use SQLite, so no separate database server is required.
+Setup the virtualenv and Django with:
 ```bash
 pip install uv
 make bootstrap
@@ -35,7 +29,7 @@ make bootstrap
 
 Start the dev server for local development:
 ```bash
-docker compose up
+docker compose -f docker-compose.yml up --build
 ```
 
 Run a command inside the docker container:

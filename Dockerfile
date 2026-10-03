@@ -1,10 +1,11 @@
 # syntax = docker/dockerfile:1.2
 FROM python:3.14-slim as backend-base
 
-ENV PYTHONDONTWRITEBYTECODE 1 \
-    PYTHONUNBUFFERED 1
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+ENV UV_PROJECT_ENVIRONMENT=/opt/venv
+ENV PATH=/opt/venv/bin:$PATH
 WORKDIR /app
-ENV PATH="/app/.venv/bin:$PATH"
 
 # Install uv package manager
 RUN pip install --upgrade pip uv
