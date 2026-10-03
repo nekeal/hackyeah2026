@@ -401,6 +401,31 @@
             box-shadow: 0 4px 12px rgba(0,0,0,0.6);
             border: 2px solid white;
         }
+
+        .obstacle-div-icon {
+            background: transparent;
+            border: none;
+        }
+
+        .marker-badge {
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            border: 2px solid #ffffff;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+            transition: transform 0.2s ease;
+        }
+        .marker-badge:hover {
+            transform: scale(1.15);
+        }
+        .marker-badge-steps {
+            background: linear-gradient(135deg, #ff5555, #e63946);
+            color: #ffffff;
+        }
     </style>
 {% endblock %}
 
@@ -518,6 +543,11 @@
                     <span>Nieznana nawierzchnia</span>
                 </div>
             </div>
+
+            <label class="checkbox-label" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);">
+                <input type="checkbox" id="chkShowStairsMap" checked>
+                <span>Pokaż ikonki schodów na mapie (<i class="fa-solid fa-stairs"></i>)</span>
+            </label>
         </div>
 
         <button id="btnCalculateRoute" class="btn-primary">
@@ -593,6 +623,7 @@
         let excludedEdgeIds = [];
         let roadsLayer = null;
         let roadsGeoJsonData = null;
+        let stairsLayer = L.layerGroup();
 
         // Surface classification constants
         const surfacesGood = ['asphalt', 'paving_stones', 'paved', 'concrete', 'compacted', 'concrete:plates'];
@@ -686,10 +717,17 @@
                 document.getElementById('maxSlopeVal').textContent = `${e.target.value}%`;
             });
 
-            // Radio button listener for background road visual mode
-            document.querySelectorAll('input[name="bgLayerMode"]').forEach(radio => {
-                radio.addEventListener('change', updateRoadsStyle);
-            });
+            // Checkbox listener for showing stairs markers on map
+            const chkStairsMap = document.getElementById('chkShowStairsMap');
+            if (chkStairsMap) {
+                chkStairsMap.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        map.addLayer(stairsLayer);
+                    } else {
+                        map.removeLayer(stairsLayer);
+                    }
+                });
+            }
         }
 
         function fetchRoadsNetwork() {
@@ -698,8 +736,39 @@
                 .then(data => {
                     roadsGeoJsonData = data;
                     renderRoadsLayer();
+                    renderStairsMarkers();
                 })
                 .catch(err => console.error("Błąd podczas pobierania siatki ulic:", err));
+        }
+
+        function renderStairsMarkers() {
+            stairsLayer.clearLayers();
+            if (!roadsGeoJsonData || !roadsGeoJsonData.features) return;
+
+            for (const feature of roadsGeoJsonData.features) {
+                const props = feature.properties || {};
+                if (props.highway === 'steps' && feature.geometry && feature.geometry.coordinates) {
+                    const coords = feature.geometry.coordinates;
+                    if (coords.length > 0) {
+                        const midIdx = Math.floor(coords.length / 2);
+                        const midPt = coords[midIdx];
+                        const stepsIcon = L.divIcon({
+                            className: 'obstacle-div-icon',
+                            html: '<div class="marker-badge marker-badge-steps" title="Schody"><i class="fa-solid fa-stairs"></i></div>',
+                            iconSize: [28, 28],
+                            iconAnchor: [14, 14]
+                        });
+                        const marker = L.marker([midPt[1], midPt[0]], { icon: stepsIcon });
+                        marker.bindPopup(`<b><i class="fa-solid fa-stairs"></i> Bariera: Schody</b><br/>Liczba stopni: ${props.step_count || 'nieokreślona'}<br/>Poręcz: ${props.handrail || 'brak'}`);
+                        stairsLayer.addLayer(marker);
+                    }
+                }
+            }
+
+            const chkStairsMap = document.getElementById('chkShowStairsMap');
+            if (!chkStairsMap || chkStairsMap.checked) {
+                map.addLayer(stairsLayer);
+            }
         }
 
         function renderRoadsLayer() {
