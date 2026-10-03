@@ -8,7 +8,7 @@ def map_view(request):
 
 def roads_geojson(request):
     # Serwowanie wygenerowanego statycznego geojsona z glownego katalogu projektu
-    filepath = settings.BASE_DIR.parent / "roads_3d.geojson"
+    filepath = settings.BASE_DIR / "roads_3d.geojson"
     if not filepath.exists():
         raise Http404("Plik roads_3d.geojson nie istnieje. Wygeneruj go najpierw skryptem generate_static_data.py")
 
