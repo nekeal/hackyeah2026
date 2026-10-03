@@ -10,9 +10,7 @@ import osmnx as ox
 ox.settings.all_oneway = True
 
 # Dodanie tagów, które chcemy zachować na węzłach grafu drogowego (np. ułatwienia dostępu)
-ox.settings.useful_tags_node.extend([
-    "amenity", "wheelchair", "name", "kerb", "tactile_paving", "crossing", "tourism"
-])
+ox.settings.useful_tags_node.extend(["amenity", "wheelchair", "name", "kerb", "tactile_paving", "crossing", "tourism"])
 
 place_name = "Kraków, Poland"
 
@@ -33,7 +31,7 @@ tags_to_download = {
     "leisure": True,
     "shop": True,
     "historic": True,
-    "wheelchair": True
+    "wheelchair": True,
 }
 pois = ox.features_from_place(place_name, tags=tags_to_download)
 
