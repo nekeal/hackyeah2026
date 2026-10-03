@@ -394,22 +394,51 @@ def add_elevations(graph: nx.MultiDiGraph) -> None:
             graph.nodes[node_id]["elevation"] = 0.0
 
 
-# --- KROK 4: KĄTY NACHYLENIA ---
+# --- KROK 4: KĄTY NACHYLENIA I FILTROWANIE SZUMU ---
 def add_grades(graph: nx.MultiDiGraph) -> None:
     log("KROK 4: Obliczanie kątów nachylenia (grade) na podstawie różnicy wzniesień...")
     ox.elevation.add_edge_grades(graph)
 
-    # Krawędzie o zerowej długości dają NaN, które propaguje się do kosztów
-    # i do GeoJSON-a ("nan" w JSON). Zamieniamy na 0.0.
     fixed = 0
-    for _, _, _, data in graph.edges(keys=True, data=True):
+    cleaned_spikes = 0
+    for u, v, _, data in graph.edges(keys=True, data=True):
+        # 1. Czyszczenie wartości NaN / inf
         for key in ("grade", "grade_abs"):
             value = float(data.get(key, 0.0) or 0.0)
             if value != value or value in (float("inf"), float("-inf")):
                 data[key] = 0.0
                 fixed += 1
+
+        length = float(data.get("length", 1.0) or 1.0)
+        highway = str(data.get("highway", "")).lower()
+        incline = data.get("incline")
+
+        u_alt = float(graph.nodes[u].get("elevation", 0.0) or 0.0)
+        v_alt = float(graph.nodes[v].get("elevation", 0.0) or 0.0)
+        dz = abs(u_alt - v_alt)
+
+        # 2. Usuwanie szumów wysokościowych DEM ze zwykłych ścieżek/chodników
+        if highway != "steps" and not incline:
+            # Dla krótkich odcinków (< 20m) różnica wysokości < 1.5m to w 100% szum pomiarowy
+            if length < 20.0 and dz < 1.5:
+                data["grade"] = 0.0
+                data["grade_abs"] = 0.0
+                cleaned_spikes += 1
+            # Dla odcinków < 40m różnica < 2.0m na płaskim terenie to też szum
+            elif length < 40.0 and dz < 2.0:
+                data["grade"] = 0.0
+                data["grade_abs"] = 0.0
+                cleaned_spikes += 1
+            # Jeśli raw grade jest > 8% bez schodów/incline, limitujemy do realistycznego maks 4%
+            elif float(data.get("grade_abs", 0.0)) > 0.08:
+                clamped = min(dz / length, 0.04) if length > 0 else 0.0
+                data["grade"] = clamped if float(data.get("grade", 0)) >= 0 else -clamped
+                data["grade_abs"] = clamped
+                cleaned_spikes += 1
+
     if fixed:
         log(f" Wyzerowano {fixed} wartości grade/grade_abs typu NaN.")
+    log(f" Wyczyszczono/wygładzono {cleaned_spikes} fałszywych kolców nachylenia z szumu DEM.")
 
 
 def as_int(value: object) -> int:
@@ -480,7 +509,7 @@ def add_accessibility_costs(graph: nx.MultiDiGraph) -> None:
 
         # 5. Oświetlenie (lit) — nie zmienia kosztu, ale zapisujemy jako atrybut
         #    do filtrowania na frontendzie (tryb nocny).
-        data["lit"] = str(data.get("lit", ""))
+        data["lit"] = _clean_val(data.get("lit")) or ""
 
         # Zakładamy, że cost = length * penalty
         length = float(data.get("length", 1.0))
@@ -491,17 +520,34 @@ def add_accessibility_costs(graph: nx.MultiDiGraph) -> None:
 def _clean_val(v: object) -> str | None:
     if v is None:
         return None
-    if isinstance(v, (list, tuple, set, np.ndarray)):
+    if isinstance(v, str):
+        s = v.strip()
+        if s.startswith("[") and s.endswith("]"):
+            try:
+                import ast
+                s_fix = s.replace("nan", "None").replace("NaN", "None")
+                parsed = ast.literal_eval(s_fix)
+                if isinstance(parsed, (list, tuple, set)):
+                    return _clean_val(parsed)
+            except Exception:
+                pass
+        if s.lower() in ["nan", "none", "<na>", "null", "", "[]"]:
+            return None
+        return s
+
+    if isinstance(v, (list, tuple, set, np.ndarray, pd.Series)):
         for x in v:
             res = _clean_val(x)
             if res is not None:
                 return res
         return None
+
     try:
         if pd.isna(v):  # type: ignore[arg-type]
             return None
     except Exception:
         pass
+
     s = str(v).strip()
     if s.lower() in ["nan", "none", "<na>", "null", ""]:
         return None
