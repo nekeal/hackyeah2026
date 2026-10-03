@@ -46,20 +46,20 @@ clean-test: ## remove test and coverage artifacts
 	rm -fr .pytest_cache
 
 test: ## run tests quickly with the default Python
-	pytest hackyeah2026
+	uv run pytest hackyeah2026
 coverage: ## check code coverage quickly with the default Python
-	pytest --cov=hackyeah2026 hackyeah2026
-	coverage report -m
-	coverage html
+	uv run pytest --cov=hackyeah2026 hackyeah2026
+	uv run coverage report -m
+	uv run coverage html
 	$(BROWSER) htmlcov/index.html
 
 quality-check: ## check quality of code
-	ruff format hackyeah2026
-	ruff check hackyeah2026
-	dmypy run hackyeah2026
+	uv run ruff format hackyeah2026
+	uv run ruff check hackyeah2026
+	uv run dmypy run hackyeah2026
 
 autoformatters: ## runs auto formatters
-	ruff format hackyeah2026
+	uv run ruff format hackyeah2026
 
 _install_uv:
 	python -m uv > /dev/null 2>&1 || pip install uv
@@ -68,17 +68,17 @@ install_requirements: _install_uv  ## install python requirements
 	uv sync
 
 install_pre_commit:  ## install pre-commit hooks
-	pre-commit install --install-hooks
-	pre-commit install -t commit-msg
+	uv run pre-commit install --install-hooks
+	uv run pre-commit install -t commit-msg
 
 bootstrap: install_requirements install_pre_commit  ## bootstrap project
-	python manage.py migrate
-	[ -d fixtures ] && python manage.py loaddata fixtures/*.yaml || exit 0
+	uv run python manage.py migrate
+	[ -d fixtures ] && uv run python manage.py loaddata fixtures/*.yaml || exit 0
 
 rebuild-db:  ## recreates database with fixtures
-	echo yes | python manage.py reset_db
-	python manage.py migrate
-	python manage.py loaddata fixtures/*
+	echo yes | uv run python manage.py reset_db
+	uv run python manage.py migrate
+	uv run python manage.py loaddata fixtures/*
 
 bootstrap-docker:  ## bootstrap project in docker
 	docker compose up --build -d
