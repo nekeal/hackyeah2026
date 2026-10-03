@@ -3,7 +3,9 @@
 #     "osmnx",
 #     "pyrosm",
 #     "geopandas",
-#     "requests"
+#     "requests",
+#     "networkx",
+#     "srtm.py"
 # ]
 # ///
 
@@ -47,12 +49,39 @@ Co pobiera i co generuje ten skrypt?
 import time
 from pathlib import Path
 
+# =============================================================================
+# MONKEY-PATCH: Naprawa błędu w integracji Geopandas 1.2.0 i Pyrosm
+# (Geopandas wysypuje się przy pustych danych bez kolumny geometry).
+import geopandas as gpd
 import networkx as nx
 import osmnx as ox
 import requests
 from pyrosm import OSM
 
+original_init = gpd.GeoDataFrame.__init__
+
+
+def patched_init(self, *args, **kwargs):
+    try:
+        original_init(self, *args, **kwargs)
+    except ValueError as e:
+        if "without a geometry column" in str(e):
+            if "crs" in kwargs:
+                kwargs.pop("crs")
+            original_init(self, *args, **kwargs)
+        else:
+            raise
+
+
+gpd.GeoDataFrame.__init__ = patched_init
+# =============================================================================
+
+# Ustaw na True, aby testować tylko mały wycinek (np. Rynek Główny) -> błyskawiczny feedback!
+FAST_MODE = True
+
 print("========== GENEROWANIE STATYCZNYCH DANYCH DLA HACKATHONU ==========")
+if FAST_MODE:
+    print("[!] TRYB FAST_MODE: Będziemy przetwarzać tylko malutki wycinek miasta dla szybkiego testowania!")
 
 # --- KROK 0: POBRANIE PLIKU PBF (JEŚLI NIE ISTNIEJE) ---
 pbf_filename = "malopolskie-latest.osm.pbf"
@@ -72,8 +101,43 @@ if not Path(pbf_filename).exists():
 else:
     print(f"\nKROK 0: Plik {pbf_filename} znajduje się już na dysku. Pomijam pobieranie.")
 
-# --- KROK 1: PUNKTY POI (WHEELCHAIR=YES) Z LOKALNEGO PLIKU PBF ---
-print("\nKROK 1: Ekstrakcja przyjaznych POI (wheelchair=yes) z pliku PBF...")
+# --- KROK 1: POBRANIE SIATKI DROGOWEJ (DLA PIESZYCH) ---
+print("\nKROK 1: Pobieranie siatki ścieżek (walk) z LOKALNEGO pliku PBF (offline)...")
+# Ramka (bounding box) Krakowa (MUSI BYĆ LISTĄ!)
+if FAST_MODE:
+    krakow_bbox = [19.93, 50.05, 19.95, 50.07]  # Rynek Główny
+else:
+    krakow_bbox = [19.79, 49.97, 20.22, 50.13]  # Cały Kraków
+# Tworzymy nową instancję OSM
+osm_network = OSM(pbf_filename)
+osm_network.bounding_box = krakow_bbox
+
+# Włączamy zachowywanie kluczowych tagów dla skrzyżowań (przeszkody i udogodnienia)
+try:
+    osm_network.keep_node_info_tags.extend(
+        ["crossing", "kerb", "tactile_paving", "highway", "wheelchair", "barrier", "elevator"]
+    )
+except AttributeError:
+    pass
+
+nodes_gdf, edges_gdf = osm_network.get_network(
+    network_type="walking", nodes=True, extra_attributes=["surface", "smoothness", "wheelchair", "incline", "ramp"]
+)
+
+# Przekształcamy na graf NetworkX
+graph_nx = osm_network.to_graph(nodes_gdf, edges_gdf, graph_type="networkx", direction="oneway")
+# OSMnx oczekuje MultiDiGraph, więc rzutujemy graf
+graph = nx.MultiDiGraph(graph_nx)
+
+# Współrzędne 'x' i 'y' są już automatycznie ustawione przez pyrosm.to_graph!
+
+# Upewniamy się, że każda krawędź ma atrybut 'length' (długość w metrach)
+graph = ox.distance.add_edge_lengths(graph)
+print(f" Pobrano {len(graph.nodes)} węzłów drogowych bez łączenia się z internetem!")
+
+
+# --- KROK 2: PUNKTY POI (WHEELCHAIR=YES) Z LOKALNEGO PLIKU PBF ---
+print("\nKROK 2: Ekstrakcja przyjaznych POI (wheelchair=yes) z pliku PBF...")
 try:
     osm = OSM(pbf_filename)
 
@@ -85,8 +149,7 @@ try:
         custom_filter=custom_filter, keep_nodes=True, keep_ways=True, keep_relations=False
     )
 
-    # Ograniczamy dane z całego województwa tylko do ramki (bounding box) Krakowa
-    krakow_bbox = (19.79, 49.97, 20.22, 50.13)
+    # Ograniczamy dane z całego województwa tylko do ramki (bounding box) Krakowa (zdefiniowanej wyżej)
     pois_krakow = pois.cx[krakow_bbox[0] : krakow_bbox[2], krakow_bbox[1] : krakow_bbox[3]]
 
     pois_krakow.to_file("accessible_pois.geojson", driver="GeoJSON")
@@ -95,65 +158,24 @@ except Exception as e:
     print(f"Błąd podczas ekstrakcji POI: {e}")
 
 
-# --- KROK 2: POBRANIE SIATKI DROGOWEJ (DLA PIESZYCH) ---
-print("\nKROK 2: Pobieranie siatki ścieżek (walk) z LOKALNEGO pliku PBF (offline)...")
-# Tworzymy nową instancję OSM, aby uniknąć błędów stanu po wcześniejszym filtrowaniu
-osm_network = OSM(pbf_filename)
-osm_network.bounding_box = krakow_bbox
-
-# Włączamy zachowywanie kluczowych tagów dla skrzyżowań (przeszkody i udogodnienia)
-osm_network.keep_node_info_tags = ["crossing", "kerb", "tactile_paving", "highway", "wheelchair", "barrier", "elevator"]
-# Włączamy zachowywanie kluczowych tagów dla ścieżek i dróg (schody, windy, nawierzchnia, strome zjazdy)
-# pyrosm domyślnie ignoruje niektóre z nich na rzecz szybkiego parsowania, więc wymuszamy ich odczyt:
-if not hasattr(osm_network, "keep_way_info_tags"):
-    # Fallback dla starszych/innych wersji pyrosm
-    pass
-# Dodatkowo możemy dodać te tagi do własnych filtrów, ale pyrosm domyślnie na krawędziach zostawia dużo.
-# Jednak zrobimy to przez specjalny custom_filter dla pyrosm, aby wyciągnął max danych:
-nodes_gdf, edges_gdf = osm_network.get_network(
-    network_type="walking", nodes=True, extra_attributes=["surface", "smoothness", "wheelchair", "incline", "ramp"]
-)
-
-# Przekształcamy na graf NetworkX
-graph_nx = osm_network.to_graph(nodes_gdf, edges_gdf, graph_type="networkx", direction="oneway")
-# OSMnx oczekuje MultiDiGraph, więc rzutujemy graf
-graph = nx.MultiDiGraph(graph_nx)
-
-# Dostosowanie nazw współrzędnych do wymogów OSMnx (potrzebuje 'x' i 'y')
-for _node_id, data in graph.nodes(data=True):
-    data["x"] = data["lon"]
-    data["y"] = data["lat"]
-
-# Upewniamy się, że każda krawędź ma atrybut 'length' (długość w metrach)
-graph = ox.distance.add_edge_lengths(graph)
-print(f" Pobrano {len(graph.nodes)} węzłów drogowych bez łączenia się z internetem!")
-
-
 # --- KROK 3: DODANIE WYSOKOŚCI 3D DO SIATKI ---
-print("\nKROK 3: Pobieranie wysokości z darmowego API (Open-Meteo)...")
-nodes = list(graph.nodes(data=True))
-batch_size = 100
-
-for i in range(0, len(nodes), batch_size):
-    batch = nodes[i : i + batch_size]
-    lats = ",".join([str(n[1]["y"]) for n in batch])
-    lons = ",".join([str(n[1]["x"]) for n in batch])
-
-    url = f"https://api.open-meteo.com/v1/elevation?latitude={lats}&longitude={lons}"
-    try:
-        response = requests.get(url, timeout=30).json()
-        if "elevation" in response:
-            for j, elevation in enumerate(response["elevation"]):
-                nodes[i + j][1]["elevation"] = elevation
-    except Exception as e:
-        print(f"Błąd API: {e}")
-
-    if (i + batch_size) % 10000 == 0:
-        print(f"  ...pobrano {i + batch_size}/{len(nodes)} wysokości")
-    time.sleep(0.05)
-
-for node_id, data in nodes:
-    graph.nodes[node_id]["elevation"] = data.get("elevation", 0.0)
+print("\nKROK 3: Pobieranie wysokości 3D z modelu SRTM (offline)...")
+try:
+    import srtm
+    elevation_data = srtm.get_data()
+    
+    for node_id, data in graph.nodes(data=True):
+        lat = data.get("y", data.get("lat"))
+        lon = data.get("x", data.get("lon"))
+        
+        alt = elevation_data.get_elevation(lat, lon)
+        graph.nodes[node_id]["elevation"] = float(alt) if alt is not None else 0.0
+        
+    print(" Sukces! Dodano współrzędne Z (wysokość) do węzłów.")
+except Exception as e:
+    print(f" Błąd SRTM: {e}. Graf nie będzie miał poprawnych wysokości.")
+    for node_id in graph.nodes():
+        graph.nodes[node_id]["elevation"] = 0.0
 
 
 # --- KROK 4: OBLICZANIE KĄTÓW NACHYLENIA ---
