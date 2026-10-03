@@ -933,9 +933,10 @@
                 stepElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
             }
 
-            if (!step.geometry || !step.geometry.coordinates || step.geometry.coordinates.length === 0) return;
+            const coords = (step.geometry && step.geometry.coordinates) || step.coords;
+            if (!coords || coords.length === 0) return;
 
-            const latLngs = step.geometry.coordinates.map(c => [c[1], c[0]]);
+            const latLngs = coords.map(c => [c[1], c[0]]);
 
             // Draw highlighted route segment on map
             activeSegmentHighlight = L.polyline(latLngs, {
