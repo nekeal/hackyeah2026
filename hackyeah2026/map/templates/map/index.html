@@ -3,10 +3,115 @@
 {% block title %}Kraków Bez Barier – Mapa Nawierzchni i Nachylenia{% endblock %}
 {% block nav_map %}active{% endblock %}
 
+{% block extra_css %}
+    <style>
+        #sidebar h1 {
+            font-size: 1.2rem;
+            margin: 0 0 4px 0;
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        .filter-group {
+            background: var(--panel2);
+            padding: 12px 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+        }
+
+        .filter-group h3 {
+            margin: 0 0 10px 0;
+            font-size: 0.9rem;
+            color: var(--accent);
+            font-weight: 700;
+        }
+
+        .filter-group label {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            cursor: pointer;
+            font-size: 0.86rem;
+            user-select: none;
+        }
+
+        .filter-group label:last-child {
+            margin-bottom: 0;
+        }
+
+        .filter-group input[type="checkbox"],
+        .filter-group input[type="radio"] {
+            margin-right: 8px;
+            accent-color: var(--accent);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .legend-color {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 3px;
+            margin-right: 8px;
+            vertical-align: middle;
+            flex-shrink: 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .c-good { background-color: #50fa7b; }
+        .c-medium { background-color: #f1fa8c; }
+        .c-steep { background-color: #ffb86c; }
+        .c-bad { background-color: #ff5555; }
+        .c-unknown { background-color: #8be9fd; }
+
+        .loader {
+            display: none;
+            text-align: center;
+            padding: 10px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 6px;
+            color: #50fa7b;
+            font-weight: bold;
+            font-size: 0.85rem;
+        }
+
+        /* Stylizacja ikonek barier Font Awesome */
+        .obstacle-div-icon {
+            background: transparent;
+            border: none;
+        }
+
+        .marker-badge {
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            border: 2px solid #ffffff;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+            transition: transform 0.2s ease;
+        }
+        .marker-badge:hover {
+            transform: scale(1.15);
+        }
+        .marker-badge-steps {
+            background: linear-gradient(135deg, #ff5555, #e63946);
+            color: #ffffff;
+        }
+        .marker-badge-kerb {
+            background: linear-gradient(135deg, #ffb86c, #ff9f43);
+            color: #1e1e2e;
+        }
+    </style>
+{% endblock %}
+
 {% block content %}
     <div id="sidebar" role="region" aria-label="Panel nawierzchni i stromości">
         <h1>Mapa Nawierzchni i Nachylenia</h1>
-        <p>Eksplorator tras pieszych wygenerowany w oparciu o dane OSM i DEM.</p>
+        <p style="font-size: 0.84rem; color: var(--muted); margin: 0 0 10px 0;">Eksplorator tras pieszych wygenerowany w oparciu o dane OSM i DEM.</p>
 
         <div id="loader" class="loader" style="display: block;">Pobieranie i renderowanie danych tras...</div>
 
@@ -74,12 +179,12 @@
             </label>
         </div>
 
-        <div style="font-size: 0.8rem; color: #6272a4; margin-top: auto;">
+        <div style="font-size: 0.78rem; color: var(--muted); margin-top: auto;">
             Wykorzystuje dane nawierzchni i nachylenia (SRTM DEM) z OSM.
         </div>
     </div>
 
-    <div id="map"></div>
+    <div id="map" role="region" aria-label="Mapa nawierzchni i nachylenia"></div>
 {% endblock %}
 
 {% block extra_js %}
@@ -151,8 +256,8 @@
             return "critical";
         }
 
-        function getSurfaceColor(category) {
-            switch(category) {
+        function getSurfaceColor(cat) {
+            switch(cat) {
                 case 'good': return '#50fa7b';
                 case 'medium': return '#f1fa8c';
                 case 'bad': return '#ff5555';
@@ -160,8 +265,8 @@
             }
         }
 
-        function getGradeColor(category) {
-            switch(category) {
+        function getGradeColor(cat) {
+            switch(cat) {
                 case 'flat': return '#50fa7b';
                 case 'moderate': return '#f1fa8c';
                 case 'steep': return '#ffb86c';
@@ -170,32 +275,33 @@
             }
         }
 
-        // Automatyczne pobieranie i ładowanie danych
+        // Pobieranie i przetwarzanie GeoJSON tras
         async function loadRoadsData() {
             const loader = document.getElementById('loader');
             try {
-                const response = await fetch('/map/api/roads/');
-                if (!response.ok) throw new Error("Brak pliku na serwerze");
+                const response = await fetch('/map/api/geojson/');
+                if (!response.ok) throw new Error('Nie udało się pobrać danych GeoJSON.');
 
-                const roadsData = await response.json();
+                const data = await response.json();
 
+                // Grupowanie według typów
                 const groupedSurface = { good: [], medium: [], bad: [], unknown: [] };
                 const groupedGrade = { flat: [], moderate: [], steep: [], critical: [] };
 
-                for (const feature of roadsData.features) {
+                for (const feature of data.features) {
                     const props = feature.properties;
-                    const sCat = getSurfaceCategory(props);
-                    groupedSurface[sCat].push(feature);
+                    const surfCat = getSurfaceCategory(props);
+                    groupedSurface[surfCat].push(feature);
 
-                    const gCat = getGradeCategory(props);
-                    groupedGrade[gCat].push(feature);
+                    const gradeCat = getGradeCategory(props);
+                    groupedGrade[gradeCat].push(feature);
 
-                    // Jeśli krawędź to schody — generujemy ikonkę schodów w punkcie środkowym
-                    if (props.highway === 'steps' && feature.geometry && feature.geometry.coordinates) {
+                    // Dodawanie ikonek schodów
+                    if (props && props.highway === 'steps' && feature.geometry && feature.geometry.coordinates) {
                         const coords = feature.geometry.coordinates;
-                        const midIndex = Math.floor(coords.length / 2);
-                        const midPt = coords[midIndex];
-                        if (midPt && midPt.length >= 2) {
+                        if (coords.length > 0) {
+                            const midIdx = Math.floor(coords.length / 2);
+                            const midPt = coords[midIdx];
                             const stepsIcon = L.divIcon({
                                 className: 'obstacle-div-icon',
                                 html: '<div class="marker-badge marker-badge-steps" title="Schody"><i class="fa-solid fa-stairs"></i></div>',
