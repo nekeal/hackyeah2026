@@ -1,120 +1,10 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kraków Bez Barier – Planer Trasy</title>
-    
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <!-- Font Awesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+{% extends "map/base_map.html" %}
 
+{% block title %}Kraków Bez Barier – Planer Trasy{% endblock %}
+{% block nav_route %}active{% endblock %}
+
+{% block extra_css %}
     <style>
-        :root {
-            --bg-dark:   #1e1e2e;
-            --panel-bg:  #282a36;
-            --panel2:    #313244;
-            --text:      #f8f8f2;
-            --accent:    #bd93f9;
-            --green:     #50fa7b;
-            --yellow:    #f1fa8c;
-            --red:       #ff5555;
-            --blue:      #8be9fd;
-            --orange:    #ffb86c;
-            --muted:     #6272a4;
-            --border:    #44475a;
-            --sidebar-w: 360px;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-
-        body, html {
-            margin: 0; padding: 0;
-            height: 100%; overflow: hidden;
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text);
-        }
-
-        /* Top Header Navigation */
-        #top-nav {
-            position: fixed;
-            top: 0; left: 0; right: 0;
-            height: 50px;
-            background: rgba(30, 30, 46, 0.95);
-            backdrop-filter: blur(8px);
-            border-bottom: 1px solid var(--border);
-            z-index: 1200;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 20px;
-        }
-
-        .brand {
-            font-size: 1.15rem;
-            font-weight: 700;
-            color: var(--accent);
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            text-decoration: none;
-        }
-
-        .nav-links {
-            display: flex;
-            gap: 10px;
-        }
-
-        .nav-link {
-            color: var(--text);
-            text-decoration: none;
-            padding: 6px 14px;
-            border-radius: 6px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            transition: all 0.2s ease;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .nav-link:hover {
-            background: var(--panel2);
-            color: var(--accent);
-        }
-
-        .nav-link.active {
-            background: var(--accent);
-            color: #1e1e2e;
-        }
-
-        /* Sidebar Container */
-        #sidebar {
-            position: fixed;
-            top: 50px; left: 0;
-            width: var(--sidebar-w);
-            height: calc(100vh - 50px);
-            background: var(--panel-bg);
-            padding: 18px 14px;
-            box-shadow: 3px 0 12px rgba(0,0,0,.6);
-            z-index: 1100;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        /* Map Container */
-        #map {
-            position: absolute;
-            top: 50px;
-            left: var(--sidebar-w);
-            right: 0;
-            bottom: 0;
-        }
-
         .section-title {
             font-size: 0.95rem;
             font-weight: 700;
@@ -512,21 +402,9 @@
             border: 2px solid white;
         }
     </style>
-</head>
-<body>
+{% endblock %}
 
-    <!-- Top Navigation Header -->
-    <nav id="top-nav" aria-label="Główna nawigacja">
-        <a href="/map/" class="brand">
-            <i class="fa-solid fa-wheelchair-move"></i> Kraków Bez Barier
-        </a>
-        <div class="nav-links">
-            <a href="/map/" class="nav-link"><i class="fa-solid fa-map"></i> Mapa Główna</a>
-            <a href="/map/pois/" class="nav-link"><i class="fa-solid fa-location-dot"></i> Dostępne POI</a>
-            <a href="/map/route/" class="nav-link active" aria-current="page"><i class="fa-solid fa-route"></i> Planer Trasy</a>
-        </div>
-    </nav>
-
+{% block content %}
     <!-- Sidebar with Route Form & Settings -->
     <div id="sidebar" role="region" aria-label="Panel wyznaczania trasy">
         
@@ -702,10 +580,9 @@
 
     <!-- Map Element -->
     <div id="map" role="region" aria-label="Mapa z wyznaczoną trasą"></div>
+{% endblock %}
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+{% block extra_js %}
     <script>
         // State management
         let map;
@@ -744,299 +621,299 @@
                 case 'good': return '#50fa7b';
                 case 'medium': return '#f1fa8c';
                 case 'bad': return '#ff5555';
-                case 'unknown': return '#8be9fd';
-                default: return '#6272a4';
+                default: return '#8be9fd';
             }
         }
 
-        function getGradeColor(props) {
-            if (!props) return '#50fa7b';
-            const hw = String(props.highway || '').toLowerCase();
-            if (hw === 'steps') return '#ff5555';
-            const g = Math.abs(parseFloat(props.grade || 0));
-            if (g < 0.03) return '#50fa7b';
-            if (g < 0.06) return '#f1fa8c';
-            if (g < 0.10) return '#ffb86c';
+        function getGradeColor(slope) {
+            const val = Math.abs(parseFloat(slope) || 0);
+            if (val <= 4) return '#50fa7b';
+            if (val <= 8) return '#f1fa8c';
+            if (val <= 12) return '#ffb86c';
             return '#ff5555';
         }
 
-        function updateRoadsStyle() {
-            if (!roadsLayer) return;
-
-            const mode = document.querySelector('input[name="bgLayerMode"]:checked')?.value || 'surface';
-            const legendBox = document.getElementById('surfaceLegend');
-            if (legendBox) legendBox.style.display = (mode === 'surface') ? 'flex' : 'none';
-
-            roadsLayer.setStyle((feature) => {
-                const props = feature.properties || {};
-                if (mode === 'surface') {
-                    return { color: getSurfaceColor(props), weight: 3, opacity: 0.7 };
-                } else if (mode === 'grade') {
-                    return { color: getGradeColor(props), weight: 3, opacity: 0.7 };
-                } else {
-                    return { color: '#6272a4', weight: 2, opacity: 0.35 };
-                }
-            });
-        }
-
-        // DOM Elements
-        const inputStart = document.getElementById('inputStart');
-        const inputEnd = document.getElementById('inputEnd');
-        const maxSlopeSlider = document.getElementById('maxSlopeSlider');
-        const maxSlopeVal = document.getElementById('maxSlopeVal');
-
-        // Init Leaflet Map
+        // Initialize Map
         function initMap() {
             map = L.map('map', {
-                preferCanvas: true,
-                zoomControl: true,
-                attributionControl: true
-            }).setView([50.0617, 19.9373], 15); // Kraków Rynek Główny
+                center: [50.0617, 19.9373],
+                zoom: 14,
+                zoomControl: true
+            });
 
-            // Standard OpenStreetMap tiles (consistent with index.html & pois.html)
-            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
-                maxZoom: 20
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
+                attribution: '&copy; OpenStreetMap &copy; CARTO'
             }).addTo(map);
 
-            // Load background roads network with dynamic surface/grade coloring
-            fetch('/map/api/roads/')
-                .then(res => res.json())
-                .then(data => {
-                    roadsGeoJsonData = data;
-                    roadsLayer = L.geoJSON(data, {
-                        style: (feature) => ({
-                            color: getSurfaceColor(feature.properties),
-                            weight: 3,
-                            opacity: 0.7
-                        })
-                    }).addTo(map);
-                    updateRoadsStyle();
-                })
-                .catch(err => console.log('Brak podglądu dróg w tle:', err));
+            // Fetch and display road background network
+            fetchRoadsNetwork();
 
+            // Set initial markers
+            setStartPoint(50.0617, 19.9373);
+            setEndPoint(50.0570, 19.9350);
+
+            // Setup map click handlers
+            map.on('click', (e) => {
+                const lat = e.latlng.lat.toFixed(5);
+                const lng = e.latlng.lng.toFixed(5);
+
+                if (activePointSelect === 'start') {
+                    setStartPoint(lat, lng);
+                    activePointSelect = null;
+                    document.body.style.cursor = 'default';
+                } else if (activePointSelect === 'end') {
+                    setEndPoint(lat, lng);
+                    activePointSelect = null;
+                    document.body.style.cursor = 'default';
+                }
+            });
+
+            // UI Listeners
+            document.getElementById('btnSetStartMap').addEventListener('click', () => {
+                activePointSelect = 'start';
+                document.body.style.cursor = 'crosshair';
+            });
+
+            document.getElementById('btnSetEndMap').addEventListener('click', () => {
+                activePointSelect = 'end';
+                document.body.style.cursor = 'crosshair';
+            });
+
+            document.getElementById('btnSwapPoints').addEventListener('click', swapPoints);
+
+            document.getElementById('maxSlopeSlider').addEventListener('input', (e) => {
+                document.getElementById('maxSlopeVal').textContent = `${e.target.value}%`;
+            });
+
+            // Radio button listener for background road visual mode
             document.querySelectorAll('input[name="bgLayerMode"]').forEach(radio => {
                 radio.addEventListener('change', updateRoadsStyle);
             });
-
-            // Map click listener for setting A/B points
-            map.on('click', function(e) {
-                const lat = parseFloat(e.latlng.lat.toFixed(6));
-                const lon = parseFloat(e.latlng.lng.toFixed(6));
-
-                if (activePointSelect === 'start' || (!activePointSelect && (!startMarker || (startMarker && endMarker)))) {
-                    setStartPoint(lat, lon);
-                    activePointSelect = 'end';
-                } else {
-                    setEndPoint(lat, lon);
-                    activePointSelect = null;
-                }
-            });
-
-            // Set initial points
-            setStartPoint(50.0617, 19.9373);
-            setEndPoint(50.0570, 19.9350);
         }
 
-        function createPinIcon(type, letter) {
-            const cssClass = type === 'start' ? 'pin-marker pin-start' : 'pin-marker pin-end';
-            return L.divIcon({
-                className: 'leaflet-div-icon',
-                html: `<div class="${cssClass}">${letter}</div>`,
+        function fetchRoadsNetwork() {
+            fetch('/map/api/geojson/')
+                .then(res => res.json())
+                .then(data => {
+                    roadsGeoJsonData = data;
+                    renderRoadsLayer();
+                })
+                .catch(err => console.error("Błąd podczas pobierania siatki ulic:", err));
+        }
+
+        function renderRoadsLayer() {
+            if (!roadsGeoJsonData) return;
+            if (roadsLayer) map.removeLayer(roadsLayer);
+
+            const activeMode = document.querySelector('input[name="bgLayerMode"]:checked').value;
+
+            roadsLayer = L.geoJSON(roadsGeoJsonData, {
+                style: feature => {
+                    const props = feature.properties || {};
+                    let color = '#44475a';
+                    let opacity = 0.4;
+                    let weight = 2;
+
+                    if (activeMode === 'surface') {
+                        color = getSurfaceColor(props);
+                        opacity = 0.55;
+                    } else if (activeMode === 'grade') {
+                        color = getGradeColor(props.max_slope_pct);
+                        opacity = 0.6;
+                        weight = 2.5;
+                    }
+
+                    return { color: color, weight: weight, opacity: opacity };
+                }
+            }).addTo(map);
+
+            roadsLayer.bringToBack();
+        }
+
+        function updateRoadsStyle() {
+            const legend = document.getElementById('surfaceLegend');
+            const activeMode = document.querySelector('input[name="bgLayerMode"]:checked').value;
+            if (activeMode === 'surface') {
+                legend.style.display = 'flex';
+            } else {
+                legend.style.display = 'none';
+            }
+
+            renderRoadsLayer();
+        }
+
+        function setStartPoint(lat, lng) {
+            document.getElementById('inputStart').value = `${lat}, ${lng}`;
+            if (startMarker) map.removeLayer(startMarker);
+
+            const icon = L.divIcon({
+                className: '',
+                html: `<div class="pin-marker pin-start">A</div>`,
                 iconSize: [32, 32],
                 iconAnchor: [16, 16]
             });
+
+            startMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
         }
 
-        function setStartPoint(lat, lon) {
-            inputStart.value = `${lat}, ${lon}`;
-            if (startMarker) map.removeLayer(startMarker);
-            startMarker = L.marker([lat, lon], {
-                icon: createPinIcon('start', 'A'),
-                draggable: true
-            }).addTo(map);
-
-            startMarker.bindPopup("<b>Punkt A (Start)</b>").openPopup();
-
-            startMarker.on('dragend', function(e) {
-                const p = e.target.getLatLng();
-                inputStart.value = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
-            });
-        }
-
-        function setEndPoint(lat, lon) {
-            inputEnd.value = `${lat}, ${lon}`;
+        function setEndPoint(lat, lng) {
+            document.getElementById('inputEnd').value = `${lat}, ${lng}`;
             if (endMarker) map.removeLayer(endMarker);
-            endMarker = L.marker([lat, lon], {
-                icon: createPinIcon('end', 'B'),
-                draggable: true
-            }).addTo(map);
 
-            endMarker.bindPopup("<b>Punkt B (Cel)</b>").openPopup();
-
-            endMarker.on('dragend', function(e) {
-                const p = e.target.getLatLng();
-                inputEnd.value = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+            const icon = L.divIcon({
+                className: '',
+                html: `<div class="pin-marker pin-end">B</div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
             });
+
+            endMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
         }
 
-        // Live slider value update
-        maxSlopeSlider.addEventListener('input', (e) => {
-            maxSlopeVal.textContent = `${e.target.value}%`;
-        });
+        function swapPoints() {
+            const startVal = document.getElementById('inputStart').value;
+            const endVal = document.getElementById('inputEnd').value;
 
-        // Swap button
-        document.getElementById('btnSwapPoints').addEventListener('click', () => {
-            const tempVal = inputStart.value;
-            inputStart.value = inputEnd.value;
-            inputEnd.value = tempVal;
+            document.getElementById('inputStart').value = endVal;
+            document.getElementById('inputEnd').value = startVal;
 
-            if (startMarker && endMarker) {
-                const pStart = startMarker.getLatLng();
-                const pEnd = endMarker.getLatLng();
-                setStartPoint(pEnd.lat, pEnd.lng);
-                setEndPoint(pStart.lat, pStart.lng);
-            }
-        });
-
-        document.getElementById('btnSetStartMap').addEventListener('click', () => {
-            activePointSelect = 'start';
-            alert('Kliknij w dowolnym miejscu na mapie, aby wskazać Punkt A (Start).');
-        });
-
-        document.getElementById('btnSetEndMap').addEventListener('click', () => {
-            activePointSelect = 'end';
-            alert('Kliknij w dowolnym miejscu na mapie, aby wskazać Punkt B (Cel).');
-        });
-
-        // Main Route Fetch Function
-        async function fetchRoute() {
-            const parseCoords = (val) => {
-                const parts = val.split(',').map(s => parseFloat(s.trim()));
-                if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
-                    return [parts[0], parts[1]];
+            if (startVal && endVal) {
+                const [sLat, sLng] = startVal.split(',').map(s => parseFloat(s.trim()));
+                const [eLat, eLng] = endVal.split(',').map(s => parseFloat(s.trim()));
+                if (!isNaN(sLat) && !isNaN(eLat)) {
+                    setStartPoint(eLat, eLng);
+                    setEndPoint(sLat, sLng);
                 }
-                return null;
-            };
+            }
+        }
 
-            const start = parseCoords(inputStart.value);
-            const end = parseCoords(inputEnd.value);
+        function parseCoords(str) {
+            const parts = str.split(',').map(p => parseFloat(p.trim()));
+            if (parts.length === 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                return { lat: parts[0], lon: parts[1] };
+            }
+            return null;
+        }
+
+        function fetchRoute() {
+            const start = parseCoords(document.getElementById('inputStart').value);
+            const end = parseCoords(document.getElementById('inputEnd').value);
 
             if (!start || !end) {
-                alert('Podaj poprawne współrzędne Punktu A i B.');
+                alert('Podaj poprawne współrzędne dla Punktu A i B (format: lat, lon)');
                 return;
             }
 
-            const loader = document.getElementById('loader');
-            loader.style.display = 'block';
-
             const payload = {
-                start: { lat: start[0], lon: start[1] },
-                end: { lat: end[0], lon: end[1] },
-                preferences: {
-                    max_slope: parseFloat(maxSlopeSlider.value),
-                    allow_stairs: document.getElementById('chkStairs').checked,
-                    allow_ramps: document.getElementById('chkRamps').checked,
-                    allow_elevators: document.getElementById('chkElevators').checked,
-                    avoid_cobblestone: document.getElementById('chkAvoidCobble').checked,
-                    smooth_crossing: document.getElementById('chkSmoothCrossing').checked,
-                    avoid_narrow: document.getElementById('chkAvoidNarrow').checked
-                },
+                start: start,
+                end: end,
+                max_slope: parseFloat(document.getElementById('maxSlopeSlider').value),
+                allow_stairs: document.getElementById('chkStairs').checked,
+                prefer_ramps: document.getElementById('chkRamps').checked,
+                use_elevators: document.getElementById('chkElevators').checked,
+                avoid_cobble: document.getElementById('chkAvoidCobble').checked,
+                smooth_crossing: document.getElementById('chkSmoothCrossing').checked,
+                avoid_narrow: document.getElementById('chkAvoidNarrow').checked,
                 excluded_edge_ids: excludedEdgeIds
             };
 
-            try {
-                const response = await fetch('/map/api/route/', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
+            // Show loader
+            document.getElementById('loader').style.display = 'block';
 
-                const data = await response.json();
-                loader.style.display = 'none';
+            fetch('/map/api/route/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('loader').style.display = 'none';
 
-                if (!response.ok || data.error) {
-                    alert(`Błąd: ${data.error || 'Nie udało się wyznaczyć trasy.'}`);
+                if (data.status === 'error') {
+                    alert('Błąd wyznaczania trasy: ' + data.message);
                     return;
                 }
 
-                renderRouteOnMap(data);
-                renderSummary(data.summary, data.provenance);
-                renderInstructions(data.instructions);
-
-            } catch (err) {
-                loader.style.display = 'none';
-                alert(`Błąd połączenia z serwerem: ${err}`);
-            }
+                displayRouteResult(data);
+            })
+            .catch(err => {
+                document.getElementById('loader').style.display = 'none';
+                alert('Błąd połączenia z serwerem: ' + err);
+            });
         }
 
-        function renderRouteOnMap(data) {
+        function displayRouteResult(data) {
+            // Draw polyline on map
             if (routePolyline) map.removeLayer(routePolyline);
 
-            const feature = data.geojson || data;
-            const latlngs = feature.geometry.coordinates.map(c => [c[1], c[0]]);
+            if (data.route_geojson && data.route_geojson.coordinates) {
+                // LatLng array for Leaflet [lat, lon]
+                const latLngs = data.route_geojson.coordinates.map(c => [c[1], c[0]]);
 
-            // Polyline styling based on accessibility status
-            let color = '#50fa7b'; // green default
-            if (data.summary.status_code === 'moderate') color = '#f1fa8c';
-            if (data.summary.status_code === 'difficult') color = '#ff5555';
+                // Dynamic gradient or color depending on route status
+                let color = '#bd93f9';
+                if (data.summary.accessibility_status === 'Pełna Dostępność') color = '#50fa7b';
+                else if (data.summary.accessibility_status === 'Umiarkowana') color = '#f1fa8c';
+                else if (data.summary.accessibility_status === 'Trudna / Bariery') color = '#ff5555';
 
-            routePolyline = L.polyline(latlngs, {
-                color: color,
-                weight: 6,
-                opacity: 0.9,
-                lineCap: 'round'
-            }).addTo(map);
+                routePolyline = L.polyline(latLngs, {
+                    color: color,
+                    weight: 6,
+                    opacity: 0.9,
+                    lineJoin: 'round'
+                }).addTo(map);
 
-            map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
-        }
+                map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+            }
 
-        function renderSummary(summary, provenance) {
+            // Populate Summary Card
+            const summary = data.summary;
             document.getElementById('summaryContainer').style.display = 'block';
-
+            
             const badge = document.getElementById('statusBadge');
             badge.textContent = summary.accessibility_status;
-            badge.className = `status-badge status-${summary.status_code}`;
+            badge.className = 'status-badge ';
+            if (summary.accessibility_status === 'Pełna Dostępność') badge.classList.add('status-accessible');
+            else if (summary.accessibility_status === 'Umiarkowana') badge.classList.add('status-moderate');
+            else badge.classList.add('status-difficult');
 
-            document.getElementById('valDistance').textContent = summary.total_distance_m < 1000 
-                ? `${Math.round(summary.total_distance_m)} m` 
-                : `${(summary.total_distance_m / 1000).toFixed(2)} km`;
-            
-            document.getElementById('valDuration').textContent = `${summary.estimated_duration_min} min`;
-            document.getElementById('valMaxSlope').textContent = `${summary.max_slope_percent}%`;
+            document.getElementById('valDistance').textContent = `${summary.total_distance_m} m`;
+            document.getElementById('valDuration').textContent = `${summary.estimated_wheelchair_time_min} min`;
+            document.getElementById('valMaxSlope').textContent = `${summary.max_slope_pct}%`;
             document.getElementById('valElevGain').textContent = `${summary.elevation_gain_m} m`;
 
-            // Barrier chips
-            const barrierBox = document.getElementById('barrierChips');
-            barrierBox.innerHTML = '';
-            const b = summary.barriers_summary;
+            // Populate Barrier Chips
+            const chipsContainer = document.getElementById('barrierChips');
+            chipsContainer.innerHTML = '';
+            
+            const b = summary.barrier_counts || {};
+            if (b.stairs > 0) chipsContainer.innerHTML += `<div class="chip">🪜 Schody: ${b.stairs}</div>`;
+            if (b.cobble > 0) chipsContainer.innerHTML += `<div class="chip">🪨 Bruk/Kostka: ${b.cobble}</div>`;
+            if (b.high_slope > 0) chipsContainer.innerHTML += `<div class="chip">📈 Duże nachylenie: ${b.high_slope}</div>`;
+            if (b.narrow > 0) chipsContainer.innerHTML += `<div class="chip">📏 Wąskie przejście: ${b.narrow}</div>`;
 
-            const addChip = (icon, text, val, isBad) => {
-                const span = document.createElement('span');
-                span.className = 'chip';
-                if (isBad && val > 0) span.style.color = 'var(--red)';
-                span.innerHTML = `<i class="${icon}"></i> ${text}: <b>${val}</b>`;
-                barrierBox.appendChild(span);
-            };
+            if (!b.stairs && !b.cobble && !b.high_slope && !b.narrow) {
+                chipsContainer.innerHTML = `<div class="chip" style="color: var(--green); border-color: var(--green);">✅ Brak barier architektonicznych</div>`;
+            }
 
-            addChip('fa-solid fa-stairs', 'Schody', b.stairs, true);
-            addChip('fa-solid fa-mountain', 'Strome podjazdy', b.high_slopes, true);
-            addChip('fa-solid fa-cubes', 'Kostka/żwir', b.cobblestone, true);
-            addChip('fa-solid fa-ban', 'Wysokie krawężniki', b.raised_kerbs, true);
-
-            // Provenance card
-            const provBox = document.getElementById('provenanceCard');
-            provBox.innerHTML = `
-                <div><strong>Źródło:</strong> ${provenance.source}</div>
-                <div><strong>Weryfikacja:</strong> ${provenance.verification_status} (${provenance.last_updated})</div>
-                <div style="font-style: italic;">${provenance.disclaimer}</div>
+            // Provenance info
+            const prov = data.provenance || {};
+            document.getElementById('provenanceCard').innerHTML = `
+                <div><strong>Źródło danych:</strong> ${prov.source || 'OSM Kraków + DEM 1m'}</div>
+                <div><strong>Algorytm:</strong> ${prov.routing_engine || 'Custom Multi-Criteria Dijkstra'}</div>
+                <div><strong>Struktura:</strong> ${prov.license || 'ODbL / CC-BY 4.0'}</div>
             `;
+
+            // Instructions step by step
+            renderInstructions(data.instructions || []);
         }
 
         let activeSegmentHighlight = null;
         let activeSegmentMarker = null;
 
-        function clearActiveSegmentHighlight() {
+        function highlightStepOnMap(step, stepElement) {
+            // Remove previous active highlights
             if (activeSegmentHighlight) {
                 map.removeLayer(activeSegmentHighlight);
                 activeSegmentHighlight = null;
@@ -1045,54 +922,65 @@
                 map.removeLayer(activeSegmentMarker);
                 activeSegmentMarker = null;
             }
+
+            // Toggle active selection styling in sidebar list
             document.querySelectorAll('.step-item').forEach(el => el.classList.remove('selected-step'));
-        }
+            if (stepElement) {
+                stepElement.classList.add('selected-step');
+                stepElement.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            }
 
-        function highlightStepOnMap(step, itemElement) {
-            if (!step.coords || step.coords.length < 2) return;
+            if (!step.geometry || !step.geometry.coordinates || step.geometry.coordinates.length === 0) return;
 
-            clearActiveSegmentHighlight();
-            if (itemElement) itemElement.classList.add('selected-step');
+            const latLngs = step.geometry.coordinates.map(c => [c[1], c[0]]);
 
-            const pts = step.coords.map(c => [c[1], c[0]]);
-            const bounds = L.latLngBounds(pts);
-
-            // Draw glowing highlighted polyline
-            const highlightColor = step.has_warning ? '#ff5555' : '#ffb86c';
-            activeSegmentHighlight = L.polyline(pts, {
-                color: highlightColor,
-                weight: 12,
+            // Draw highlighted route segment on map
+            activeSegmentHighlight = L.polyline(latLngs, {
+                color: '#ffb86c',
+                weight: 10,
                 opacity: 0.95,
-                lineCap: 'round',
-                lineJoin: 'round'
+                lineCap: 'round'
             }).addTo(map);
 
-            // Place pulsing alert marker at midpoint
-            const midIdx = Math.floor(pts.length / 2);
-            const midPt = pts[midIdx];
+            const bounds = activeSegmentHighlight.getBounds();
+            const center = bounds.getCenter();
 
-            const iconEmoji = step.has_stairs ? '🪜' : (step.max_slope_pct > 6 ? '⛰️' : '⚠️');
-            const pulseIcon = L.divIcon({
-                className: 'leaflet-div-icon',
-                html: `
-                    <div class="pulse-marker-box">
-                        <div class="pulse-ring"></div>
-                        <div class="pulse-badge">${iconEmoji}</div>
-                    </div>
-                `,
-                iconSize: [40, 40],
-                iconAnchor: [20, 20]
-            });
+            // Create pulsing warning marker if step has a warning
+            if (step.has_warning) {
+                const pulseIcon = L.divIcon({
+                    className: '',
+                    html: `
+                        <div class="pulse-marker-box">
+                            <div class="pulse-ring"></div>
+                            <div class="pulse-badge">⚠️</div>
+                        </div>
+                    `,
+                    iconSize: [40, 40],
+                    iconAnchor: [20, 20]
+                });
 
-            activeSegmentMarker = L.marker(midPt, { icon: pulseIcon }).addTo(map);
+                activeSegmentMarker = L.marker(center, { icon: pulseIcon }).addTo(map);
+            } else {
+                const infoIcon = L.divIcon({
+                    className: '',
+                    html: `
+                        <div class="pin-marker" style="background: var(--accent); width: 28px; height: 28px; font-size: 13px;">
+                            ${step.step_number}
+                        </div>
+                    `,
+                    iconSize: [28, 28],
+                    iconAnchor: [14, 14]
+                });
+                activeSegmentMarker = L.marker(center, { icon: infoIcon }).addTo(map);
+            }
 
-            const warningInfo = step.warning ? `<div style="color: #e74c3c; font-weight: 700; margin-bottom: 6px;">⚠️ ${step.warning}</div>` : '';
+            // Popup with segment details and exclude button
             const popupContent = `
-                <div style="font-family: sans-serif; padding: 4px; min-width: 200px;">
-                    <div style="font-weight: 700; font-size: 0.98rem; margin-bottom: 4px; color: #2c3e50;">${step.step_number}. ${step.street_name}</div>
-                    ${warningInfo}
-                    <div style="font-size: 0.84rem; color: #555; line-height: 1.4;">
-                        <b>Dystans:</b> ${step.distance_m} m<br>
+                <div style="font-family: system-ui; min-width: 200px; color: #1e1e2e;">
+                    <strong style="font-size: 0.95rem;">${step.step_number}. ${step.street_name}</strong><br>
+                    <span style="font-size: 0.85rem; color: #555;">Długość: ${step.distance_m} m</span>
+                    ${step.warning ? `<div style="margin-top: 6px; padding: 6px; background: #fff3cd; color: #856404; border-radius: 4px; font-size: 0.82rem; font-weight: bold;">⚠️ ${step.warning}</div>` : ''}
+                    <div style="margin-top: 8px; font-size: 0.8rem; border-top: 1px solid #ddd; padding-top: 6px;">
                         <b>Nawierzchnia:</b> ${step.surface}<br>
                         <b>Max nachylenie:</b> ${step.max_slope_pct}%
                     </div>
@@ -1174,5 +1062,4 @@
             initMap();
         });
     </script>
-</body>
-</html>
+{% endblock %}

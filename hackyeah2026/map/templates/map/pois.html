@@ -1,75 +1,10 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kraków Bez Barier – Dostępne POI</title>
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+{% extends "map/base_map.html" %}
 
+{% block title %}Kraków Bez Barier – Dostępne POI{% endblock %}
+{% block nav_pois %}active{% endblock %}
+
+{% block extra_css %}
     <style>
-        :root {
-            --bg-dark:   #1e1e2e;
-            --panel-bg:  #282a36;
-            --panel2:    #313244;
-            --text:      #f8f8f2;
-            --accent:    #bd93f9;
-            --green:     #50fa7b;
-            --yellow:    #f1fa8c;
-            --red:       #ff5555;
-            --blue:      #8be9fd;
-            --orange:    #ffb86c;
-            --pink:      #ff79c6;
-            --muted:     #6272a4;
-            --border:    #44475a;
-            --sidebar-w: 300px;
-            --drawer-w:  360px;
-        }
-
-        *, *::before, *::after { box-sizing: border-box; }
-
-        body, html {
-            margin: 0; padding: 0;
-            height: 100%; overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg-dark);
-            color: var(--text);
-        }
-
-        /* ════════════════ SIDEBAR (filters, left) ══════════════════ */
-        #sidebar {
-            position: fixed;
-            top: 0; left: 0;
-            width: var(--sidebar-w);
-            height: 100vh;
-            background: var(--panel-bg);
-            padding: 18px 14px;
-            box-shadow: 2px 0 10px rgba(0,0,0,.5);
-            z-index: 1100;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-        }
-
-        #sidebar h1 {
-            font-size: 1.2rem;
-            margin: 0 0 2px;
-            color: var(--accent);
-            border-bottom: 2px solid var(--border);
-            padding-bottom: 8px;
-        }
-
-        .nav-btn {
-            flex: 1; text-align: center; padding: 6px 8px;
-            background: #313244; color: #f8f8f2; text-decoration: none;
-            border-radius: 6px; font-size: 0.82rem; font-weight: 600;
-            border: 1px solid #44475a; transition: all 0.2s;
-            display: flex; align-items: center; justify-content: center; gap: 4px;
-        }
-        .nav-btn:hover { background: #44475a; color: #bd93f9; }
-        .nav-btn.active { background: #bd93f9; color: #1e1e2e; }
-
         #poi-count { font-size: .8rem; color: var(--muted); margin-top: -6px; }
 
         .filter-group {
@@ -132,31 +67,17 @@
             line-height: 1.5;
         }
 
-        /* ════════════════ MAP ══════════════════════════════════════ */
-        #map {
-            position: absolute;
-            top: 0;
-            left: var(--sidebar-w);
-            right: 0;
-            bottom: 0;
-        }
-
-        /* ════════════════ DETAILS DRAWER ═══════════════════════════
-           Desktop : slides in from the right
-           Mobile  : slides up from the bottom                       */
+        /* Details drawer */
         #drawer {
             position: fixed;
             background: var(--panel-bg);
-            z-index: 1200;
+            z-index: 1250;
             overflow-y: auto;
-            transition: transform .32s cubic-bezier(.4,0,.2,1),
-                        box-shadow .32s ease;
-
-            /* ── Desktop (right panel) ── */
-            top: 0;
+            transition: transform .32s cubic-bezier(.4,0,.2,1), box-shadow .32s ease;
+            top: 50px;
             right: 0;
             width: var(--drawer-w);
-            height: 100vh;
+            height: calc(100vh - 50px);
             transform: translateX(100%);
             box-shadow: -4px 0 24px rgba(0,0,0,.6);
             border-left: 1px solid var(--border);
@@ -167,17 +88,13 @@
             transform: translateX(0);
         }
 
-        /* ── Mobile override ── */
         @media (max-width: 700px) {
             #sidebar {
-                /* hide sidebar on mobile; filters via a toggle button */
                 transform: translateX(-100%);
                 transition: transform .3s ease;
             }
             #sidebar.mobile-open { transform: translateX(0); }
-
             #map { left: 0; }
-
             #drawer {
                 top: auto;
                 left: 0; right: 0;
@@ -190,16 +107,10 @@
                 border-radius: 16px 16px 0 0;
             }
             #drawer.open { transform: translateY(0); }
-
-            /* drag handle */
-            #drawer-handle {
-                display: block;
-            }
-
+            #drawer-handle { display: block; }
             #mobile-filter-btn { display: flex; }
         }
 
-        /* Drawer inner layout */
         #drawer-inner {
             padding: 20px 18px 40px;
             display: flex;
@@ -207,7 +118,6 @@
             gap: 14px;
         }
 
-        /* Drag handle (mobile only) */
         #drawer-handle {
             display: none;
             width: 40px; height: 4px;
@@ -217,7 +127,6 @@
             cursor: grab;
         }
 
-        /* Close button */
         #drawer-close {
             position: absolute;
             top: 14px; right: 14px;
@@ -234,7 +143,6 @@
         }
         #drawer-close:hover { background: var(--panel2); }
 
-        /* Drawer header */
         .drawer-name {
             font-size: 1.15rem;
             font-weight: 700;
@@ -243,20 +151,9 @@
             padding-right: 36px;
             line-height: 1.3;
         }
-        .drawer-type {
-            font-size: .8rem;
-            color: var(--muted);
-            margin-top: 2px;
-        }
-        .drawer-address {
-            font-size: .84rem;
-            color: var(--muted);
-        }
-
-        /* Section heading inside drawer */
-        .dsection {
-            margin: 0;
-        }
+        .drawer-type { font-size: .8rem; color: var(--muted); margin-top: 2px; }
+        .drawer-address { font-size: .84rem; color: var(--muted); }
+        .dsection { margin: 0; }
         .dsection-title {
             font-size: .72rem;
             font-weight: 700;
@@ -266,7 +163,6 @@
             margin: 0 0 8px;
         }
 
-        /* Accessibility chips / badges */
         .a11y-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -298,7 +194,6 @@
         .chip-no    { color: var(--red)    !important; }
         .chip-limit { color: var(--yellow) !important; }
 
-        /* Full-width description block */
         .a11y-desc {
             background: var(--panel2);
             border-left: 3px solid var(--accent);
@@ -310,7 +205,6 @@
             font-style: italic;
         }
 
-        /* Info rows (hours, phone, website) */
         .info-row {
             display: flex;
             align-items: flex-start;
@@ -321,15 +215,11 @@
         .info-row .info-icon { font-size: 1rem; flex-shrink: 0; }
         .info-row a { color: var(--blue); text-decoration: none; }
         .info-row a:hover { text-decoration: underline; }
-
-        /* Divider */
         .drawer-divider {
             border: none;
             border-top: 1px solid var(--border);
             margin: 2px 0;
         }
-
-        /* OSM link */
         .osm-link {
             font-size: .75rem;
             color: var(--muted);
@@ -339,7 +229,6 @@
         .osm-link a { color: var(--muted); }
         .osm-link a:hover { color: var(--accent); }
 
-        /* ── Mobile filter button ── */
         #mobile-filter-btn {
             display: none;
             position: fixed;
@@ -359,17 +248,11 @@
             box-shadow: 0 4px 16px rgba(0,0,0,.4);
         }
     </style>
-</head>
-<body>
+{% endblock %}
 
+{% block content %}
     <!-- ═══ FILTER SIDEBAR ═══════════════════════════════════════════ -->
     <div id="sidebar" role="navigation" aria-label="Filtry kategorii">
-        <nav style="display: flex; gap: 6px; margin-bottom: 4px;" aria-label="Nawigacja">
-            <a href="/map/" class="nav-btn"><i class="fa-solid fa-map"></i> Mapa</a>
-            <a href="/map/pois/" class="nav-btn active"><i class="fa-solid fa-location-dot"></i> POI</a>
-            <a href="/map/route/" class="nav-btn"><i class="fa-solid fa-route"></i> Trasa</a>
-        </nav>
-
         <h1>♿ Dostępne POI</h1>
         <p id="poi-count">Wczytywanie…</p>
 
@@ -424,9 +307,9 @@
     <button id="mobile-filter-btn" aria-label="Pokaż filtry">
         🔍 Filtry
     </button>
+{% endblock %}
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+{% block extra_js %}
     <script>
     // ── Map init ─────────────────────────────────────────────────────
     const map = L.map('map', { zoomControl: true }).setView([50.0614, 19.9365], 14);
@@ -823,5 +706,4 @@
     });
 
     </script>
-</body>
-</html>
+{% endblock %}

@@ -44,18 +44,56 @@ HIGHWAY_NAMES_PL = {
 }
 
 
-def translate_surface(surface: str | None) -> str:
-    if not surface:
+def _clean_attribute_val(val: Any) -> str | None:
+    if val is None:
+        return None
+
+    if isinstance(val, (list, tuple, set)):
+        cleaned_items: list[str] = []
+        for item in val:
+            item_str = _clean_attribute_val(item)
+            if item_str and item_str.lower() not in ("nan", "none", "null", "<na>"):
+                cleaned_items.append(item_str)
+        if not cleaned_items:
+            return None
+        unique_items = list(dict.fromkeys(cleaned_items))
+        return " / ".join(unique_items)
+
+    s = str(val).strip()
+    if not s or s.lower() in ("nan", "none", "<na>", "null", "[]"):
+        return None
+
+    if (s.startswith("[") and s.endswith("]")) or (s.startswith("(") and s.endswith(")")):
+        import ast
+
+        try:
+            s_fixed = s.replace("nan", "None").replace("NaN", "None")
+            parsed = ast.literal_eval(s_fixed)
+            return _clean_attribute_val(parsed)
+        except ValueError, SyntaxError:
+            pass
+
+    return s
+
+
+def translate_surface(surface: Any) -> str:
+    cleaned_val = _clean_attribute_val(surface)
+    if not cleaned_val:
         return "Brak danych o nawierzchni"
-    clean = surface.strip().lower()
-    return SURFACE_NAMES_PL.get(clean, surface.capitalize())
+    parts = [p.strip() for p in cleaned_val.split(" / ")]
+    translated = [SURFACE_NAMES_PL.get(p.lower(), p.capitalize()) for p in parts]
+    unique_translated = list(dict.fromkeys(translated))
+    return " / ".join(unique_translated)
 
 
-def translate_highway(highway: str | None) -> str:
-    if not highway:
+def translate_highway(highway: Any) -> str:
+    cleaned_val = _clean_attribute_val(highway)
+    if not cleaned_val:
         return "Atratywny odcinek pieszy"
-    clean = highway.strip().lower()
-    return HIGHWAY_NAMES_PL.get(clean, highway.capitalize())
+    parts = [p.strip() for p in cleaned_val.split(" / ")]
+    translated = [HIGHWAY_NAMES_PL.get(p.lower(), p.capitalize()) for p in parts]
+    unique_translated = list(dict.fromkeys(translated))
+    return " / ".join(unique_translated)
 
 
 def _calc_stairs_penalty(
@@ -295,18 +333,28 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
     grade_abs = float(data.get("grade_abs", 0.0) or 0.0)
     grade_pct = grade_abs * 100.0
 
-    highway = str(data.get("highway", ""))
-    surface = str(data.get("surface", ""))
-    name = str(data.get("name", ""))
-    kerb = str(data.get("kerb", ""))
+    raw_highway = data.get("highway")
+    raw_surface = data.get("surface")
+    raw_name = data.get("name")
+    raw_kerb = data.get("kerb")
 
-    is_steps = highway.lower() == "steps"
+    cleaned_name = _clean_attribute_val(raw_name)
+    cleaned_surface = _clean_attribute_val(raw_surface)
+    cleaned_highway = _clean_attribute_val(raw_highway)
+    cleaned_kerb = _clean_attribute_val(raw_kerb)
+
+    is_steps = "steps" in (cleaned_highway.lower() if cleaned_highway else "")
     is_high_slope = grade_pct > max_slope_limit
-    is_cobblestones = surface.lower() in ("cobblestone", "unhewn_cobblestone", "sett", "gravel", "sand", "pebblestone")
-    is_raised_kerb = kerb.lower() == "raised"
 
-    street_label = name if name and name.strip() else translate_highway(highway)
-    surface_label = translate_surface(surface)
+    cobble_types = {"cobblestone", "unhewn_cobblestone", "sett", "gravel", "sand", "pebblestone"}
+    is_cobblestones = False
+    if cleaned_surface:
+        is_cobblestones = any(s.strip().lower() in cobble_types for s in cleaned_surface.split("/"))
+
+    is_raised_kerb = "raised" in (cleaned_kerb.lower() if cleaned_kerb else "")
+
+    street_label = cleaned_name if cleaned_name else translate_highway(raw_highway)
+    surface_label = translate_surface(raw_surface)
     warning_text = _build_step_warning(
         is_steps, is_high_slope, is_cobblestones, is_raised_kerb, data, grade_pct, surface_label
     )
@@ -323,7 +371,7 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
         "is_raised_kerb": is_raised_kerb,
         "u_elev": u_elev,
         "v_elev": v_elev,
-        "kerb": kerb,
+        "kerb": cleaned_kerb or "",
         "data": data,
         "v_coords": (v_lat, v_lon, v_elev),
         "u_coords": (u_lat, u_lon, u_elev),

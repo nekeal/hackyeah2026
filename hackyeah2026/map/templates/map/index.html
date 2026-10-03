@@ -1,163 +1,11 @@
-<!DOCTYPE html>
-<html lang="pl">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kraków Bez Barier - Mapa Nawierzchni i Nachylenia</title>
+{% extends "map/base_map.html" %}
 
-    <!-- Leaflet CSS -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+{% block title %}Kraków Bez Barier – Mapa Nawierzchni i Nachylenia{% endblock %}
+{% block nav_map %}active{% endblock %}
 
-    <!-- Font Awesome 6 Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
-
-    <style>
-        :root {
-            --bg-dark: #1e1e2e;
-            --panel-bg: #282a36;
-            --text-light: #f8f8f2;
-            --accent: #bd93f9;
-        }
-
-        body, html {
-            margin: 0;
-            padding: 0;
-            height: 100vh;
-            min-height: 100vh;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background-color: var(--bg-dark);
-            color: var(--text-light);
-            display: flex;
-        }
-
-        #sidebar {
-            width: 320px;
-            background-color: var(--panel-bg);
-            padding: 20px;
-            box-shadow: 2px 0 5px rgba(0,0,0,0.5);
-            z-index: 1000;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-
-        #map {
-            position: absolute;
-            top: 0;
-            left: 300px;
-            right: 0;
-            bottom: 0;
-        }
-
-        h1 {
-            font-size: 1.5rem;
-            margin-top: 0;
-            color: var(--accent);
-            border-bottom: 2px solid #44475a;
-            padding-bottom: 10px;
-        }
-
-        .filter-group {
-            background: #44475a;
-            padding: 15px;
-            border-radius: 8px;
-        }
-
-        .filter-group h3 {
-            margin: 0 0 10px 0;
-            font-size: 1.1rem;
-        }
-
-        .filter-group label {
-            display: flex;
-            align-items: center;
-            margin-bottom: 8px;
-            cursor: pointer;
-            font-size: 0.95rem;
-        }
-
-        .filter-group input[type="checkbox"],
-        .filter-group input[type="radio"] {
-            margin-right: 10px;
-            accent-color: var(--accent);
-            transform: scale(1.2);
-        }
-
-        .legend-color {
-            display: inline-block;
-            width: 15px;
-            height: 15px;
-            border-radius: 3px;
-            margin-right: 8px;
-            vertical-align: middle;
-            flex-shrink: 0;
-        }
-
-        .c-good { background-color: #50fa7b; }
-        .c-medium { background-color: #f1fa8c; }
-        .c-steep { background-color: #ffb86c; }
-        .c-bad { background-color: #ff5555; }
-        .c-unknown { background-color: #8be9fd; }
-
-        .loader {
-            display: none;
-            text-align: center;
-            padding: 10px;
-            background: rgba(0,0,0,0.7);
-            border-radius: 5px;
-            margin-top: 20px;
-            color: #50fa7b;
-            font-weight: bold;
-        }
-
-        /* Stylizacja ikonek barier Font Awesome */
-        .marker-badge {
-            border-radius: 50%;
-            width: 28px;
-            height: 28px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 14px;
-            border: 2px solid #ffffff;
-            box-shadow: 0 3px 8px rgba(0,0,0,0.6);
-            transition: transform 0.2s ease;
-        }
-        .marker-badge:hover {
-            transform: scale(1.15);
-        }
-        .marker-badge-steps {
-            background: linear-gradient(135deg, #ff5555, #e63946);
-            color: #ffffff;
-        }
-        .marker-badge-kerb {
-            background: linear-gradient(135deg, #ffb86c, #ff9f43);
-            color: #1e1e2e;
-        }
-
-
-        .nav-btn {
-            flex: 1; text-align: center; padding: 6px 8px;
-            background: #313244; color: #f8f8f2; text-decoration: none;
-            border-radius: 6px; font-size: 0.82rem; font-weight: 600;
-            border: 1px solid #44475a; transition: all 0.2s;
-            display: flex; align-items: center; justify-content: center; gap: 4px;
-        }
-        .nav-btn:hover { background: #44475a; color: #bd93f9; }
-        .nav-btn.active { background: #bd93f9; color: #1e1e2e; }
-    </style>
-</head>
-<body>
-
-    <div id="sidebar">
-        <nav style="display: flex; gap: 6px; margin-bottom: 8px;" aria-label="Nawigacja">
-            <a href="/map/" class="nav-btn active"><i class="fa-solid fa-map"></i> Mapa</a>
-            <a href="/map/pois/" class="nav-btn"><i class="fa-solid fa-location-dot"></i> POI</a>
-            <a href="/map/route/" class="nav-btn"><i class="fa-solid fa-route"></i> Trasa</a>
-        </nav>
-
-        <h1>Kraków Bez Barier</h1>
+{% block content %}
+    <div id="sidebar" role="region" aria-label="Panel nawierzchni i stromości">
+        <h1>Mapa Nawierzchni i Nachylenia</h1>
         <p>Eksplorator tras pieszych wygenerowany w oparciu o dane OSM i DEM.</p>
 
         <div id="loader" class="loader" style="display: block;">Pobieranie i renderowanie danych tras...</div>
@@ -232,10 +80,9 @@
     </div>
 
     <div id="map"></div>
+{% endblock %}
 
-    <!-- Leaflet JS -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+{% block extra_js %}
     <script>
         // Inicjalizacja Mapy z renderowaniem Canvas dla wydajności
         const map = L.map('map', { preferCanvas: true }).setView([50.0614, 19.9365], 16); // Kraków Centrum
@@ -511,5 +358,4 @@
             });
         });
     </script>
-</body>
-</html>
+{% endblock %}

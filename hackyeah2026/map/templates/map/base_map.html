@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Kraków Bez Barier{% endblock %}</title>
+
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <!-- Font Awesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <style>
+        :root {
+            --bg-dark:   #1e1e2e;
+            --panel-bg:  #282a36;
+            --panel2:    #313244;
+            --text:      #f8f8f2;
+            --text-light:#f8f8f2;
+            --accent:    #bd93f9;
+            --green:     #50fa7b;
+            --yellow:    #f1fa8c;
+            --red:       #ff5555;
+            --blue:      #8be9fd;
+            --orange:    #ffb86c;
+            --pink:      #ff79c6;
+            --muted:     #6272a4;
+            --border:    #44475a;
+            --sidebar-w: 340px;
+            --drawer-w:  360px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            min-height: 100vh;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            display: flex;
+        }
+
+        /* Top Navigation Header */
+        #top-nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 50px;
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1200;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 18px;
+        }
+
+        .brand {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 8px;
+        }
+
+        .nav-link {
+            color: var(--text);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.88rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            border: 1px solid transparent;
+        }
+
+        .nav-link:hover {
+            background: var(--panel2);
+            color: var(--accent);
+            border-color: var(--border);
+        }
+
+        .nav-link.active {
+            background: var(--accent);
+            color: #1e1e2e;
+            border-color: var(--accent);
+        }
+
+        #sidebar {
+            position: fixed;
+            top: 50px; left: 0;
+            width: var(--sidebar-w);
+            height: calc(100vh - 50px);
+            background-color: var(--panel-bg);
+            padding: 18px 14px;
+            box-shadow: 3px 0 12px rgba(0,0,0,0.6);
+            z-index: 1100;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        #map {
+            position: absolute;
+            top: 50px;
+            left: var(--sidebar-w);
+            right: 0;
+            bottom: 0;
+        }
+
+        @media (max-width: 768px) {
+            #top-nav { padding: 0 10px; }
+            .brand span { display: none; }
+            .nav-link { padding: 6px 8px; font-size: 0.8rem; }
+            #sidebar { width: 100%; height: 50vh; top: auto; bottom: 0; }
+            #map { left: 0; top: 50px; }
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <nav id="top-nav" aria-label="Główna nawigacja">
+        <a href="{% url 'map:index' %}" class="brand">
+            <i class="fa-solid fa-wheelchair-move"></i> <span>Kraków Bez Barier</span>
+        </a>
+        <div class="nav-links">
+            <a href="{% url 'map:index' %}" class="nav-link {% block nav_map %}{% endblock %}"><i class="fa-solid fa-map"></i> Mapa Główna</a>
+            <a href="{% url 'map:pois' %}" class="nav-link {% block nav_pois %}{% endblock %}"><i class="fa-solid fa-location-dot"></i> Dostępne POI</a>
+            <a href="{% url 'map:route' %}" class="nav-link {% block nav_route %}{% endblock %}"><i class="fa-solid fa-route"></i> Planer Trasy</a>
+        </div>
+    </nav>
+
+    {% block content %}{% endblock %}
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>
