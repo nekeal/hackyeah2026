@@ -950,16 +950,18 @@
             else if (summary.accessibility_status === 'Umiarkowana') badge.classList.add('status-moderate');
             else badge.classList.add('status-difficult');
 
-            document.getElementById('valDistance').textContent = `${summary.total_distance_m} m`;
-            document.getElementById('valDuration').textContent = `${summary.estimated_wheelchair_time_min} min`;
-            document.getElementById('valMaxSlope').textContent = `${summary.max_slope_pct}%`;
-            document.getElementById('valElevGain').textContent = `${summary.elevation_gain_m} m`;
+            document.getElementById('valDistance').textContent = `${summary.total_distance_m || 0} m`;
+            const duration = summary.estimated_wheelchair_time_min ?? summary.estimated_duration_min ?? 0;
+            document.getElementById('valDuration').textContent = `${duration} min`;
+            const maxSlope = summary.max_slope_pct ?? summary.max_slope_percent ?? 0;
+            document.getElementById('valMaxSlope').textContent = `${maxSlope}%`;
+            document.getElementById('valElevGain').textContent = `${summary.elevation_gain_m || 0} m`;
 
             // Populate Barrier Chips
             const chipsContainer = document.getElementById('barrierChips');
             chipsContainer.innerHTML = '';
             
-            const b = summary.barrier_counts || {};
+            const b = summary.barrier_counts || summary.barriers_summary || {};
             if (b.stairs > 0) chipsContainer.innerHTML += `<div class="chip">🪜 Schody: ${b.stairs}</div>`;
             if (b.cobble > 0) chipsContainer.innerHTML += `<div class="chip">🪨 Bruk/Kostka: ${b.cobble}</div>`;
             if (b.high_slope > 0) chipsContainer.innerHTML += `<div class="chip">📈 Duże nachylenie: ${b.high_slope}</div>`;

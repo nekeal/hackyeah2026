@@ -653,7 +653,9 @@ def calculate_route(
         "summary": {
             "total_distance_m": round(total_distance, 1),
             "estimated_duration_min": duration_min,
+            "estimated_wheelchair_time_min": duration_min,
             "max_slope_percent": round(max_slope_in_route, 1),
+            "max_slope_pct": round(max_slope_in_route, 1),
             "avg_slope_percent": round(total_slope_sum / total_distance, 1) if total_distance > 0 else 0.0,
             "elevation_gain_m": round(total_elevation_gain, 1),
             "accessibility_status": status_label,
@@ -664,6 +666,7 @@ def calculate_route(
             "start_node": start_node,
             "end_node": end_node,
             "barriers_summary": counts,
+            "barrier_counts": counts,
         },
         "instructions": instructions,
         "provenance": {
