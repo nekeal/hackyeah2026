@@ -21,6 +21,9 @@ Co jest ważne w projekcie:
     - 
 - Informacje szczegółowe o punkcie
     - przystosowanie do wózków?
+    - krawężniki (kerb)
+    - przejścia dla pieszych (crossing)
+    - oznaczenia dotykowe (tactile_paving)
     - 
 - Możliwość wykluczenia danego typu punktów przez akcję na punkcie 
     - wybieram punkt -> wyklucz ten typ punktów z trasy -> poszukiwania nowej trasy

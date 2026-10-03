@@ -46,13 +46,13 @@ Co pobiera i co generuje ten skrypt?
 =============================================================================
 """
 
-import time
 from pathlib import Path
 
 # =============================================================================
 # MONKEY-PATCH: Naprawa błędu w integracji Geopandas 1.2.0 i Pyrosm
 # (Geopandas wysypuje się przy pustych danych bez kolumny geometry).
 import geopandas as gpd
+import pandas as pd
 import networkx as nx
 import osmnx as ox
 import requests
@@ -158,19 +158,96 @@ except Exception as e:
     print(f"Błąd podczas ekstrakcji POI: {e}")
 
 
+
+# --- KROK 2.5: EKSTRAKCJA SZCZEGÓŁÓW DOSTĘPNOŚCI (KRAWĘŻNIKI, PRZEJŚCIA, TACTILE PAVING) ---
+print("\nKROK 2.5: Ekstrakcja szczegółów dostępności (kerb/crossing/tactile_paving) z pliku PBF...")
+try:
+    osm_det = OSM(pbf_filename)
+    custom_filter_det = {
+        "kerb": [True, "raised", "lowered", "flush", "rolled", "no", "unknown"],
+        "crossing": [True, "unmarked", "zebra", "marked", "traffic_signals", "island", "no"],
+        "tactile_paving": [True, "yes", "no", "partial", "unknown"],
+    }
+
+    det_list = []
+    for key, values in custom_filter_det.items():
+        try:
+            res = osm_det.get_data_by_custom_criteria(
+                custom_filter={key: values}, keep_nodes=True, keep_ways=True, keep_relations=False
+            )
+            if res is not None and len(res) > 0:
+                det_list.append(res)
+        except Exception:
+            continue
+
+    if det_list:
+        details = gpd.GeoDataFrame(pd.concat(det_list, ignore_index=True, sort=False))
+    else:
+        details = gpd.GeoDataFrame()
+
+    if len(details) > 0:
+        details_krakow = details.cx[krakow_bbox[0] : krakow_bbox[2], krakow_bbox[1] : krakow_bbox[3]]
+    else:
+        details_krakow = details
+
+    def _det_type(row):
+        has_kerb = bool(row.get("kerb"))
+        has_cross = bool(row.get("crossing"))
+        has_tact = bool(row.get("tactile_paving"))
+        flags = sum([1 if has_kerb else 0, 1 if has_cross else 0, 1 if has_tact else 0])
+        if flags >= 2:
+            return "mixed"
+        if has_kerb:
+            return "kerb"
+        if has_cross:
+            return "crossing"
+        if has_tact:
+            return "tactile_paving"
+        return "other"
+
+    if len(details_krakow) > 0:
+        details_krakow = details_krakow.copy()
+        details_krakow["type"] = details_krakow.apply(_det_type, axis=1)
+        details_krakow["osm_type"] = details_krakow["geometry"].apply(
+            lambda g: "node" if g.geom_type == "Point" else ("way" if g.geom_type in ("LineString", "MultiLineString") else "unknown")
+        )
+        keep_cols = [
+            "osm_id",
+            "osm_type",
+            "type",
+            "kerb",
+            "crossing",
+            "tactile_paving",
+            "wheelchair",
+            "name",
+            "highway",
+            "tags",
+            "geometry",
+        ]
+        for c in keep_cols:
+            if c not in details_krakow.columns:
+                details_krakow[c] = None
+        details_krakow = details_krakow[keep_cols].drop_duplicates(subset=["osm_type", "osm_id"], keep="first")
+
+    details_krakow.to_file("accessibility_details.geojson", driver="GeoJSON")
+    print(f" Zapisano {len(details_krakow)} szczegółów dostępności do 'accessibility_details.geojson'")
+except Exception as e:
+    print(f"Błąd podczas ekstrakcji szczegółów dostępności: {e}")
+
 # --- KROK 3: DODANIE WYSOKOŚCI 3D DO SIATKI ---
 print("\nKROK 3: Pobieranie wysokości 3D z modelu SRTM (offline)...")
 try:
     import srtm
+
     elevation_data = srtm.get_data()
-    
+
     for node_id, data in graph.nodes(data=True):
         lat = data.get("y", data.get("lat"))
         lon = data.get("x", data.get("lon"))
-        
+
         alt = elevation_data.get_elevation(lat, lon)
         graph.nodes[node_id]["elevation"] = float(alt) if alt is not None else 0.0
-        
+
     print(" Sukces! Dodano współrzędne Z (wysokość) do węzłów.")
 except Exception as e:
     print(f" Błąd SRTM: {e}. Graf nie będzie miał poprawnych wysokości.")
@@ -182,6 +259,41 @@ except Exception as e:
 print("\nKROK 4: Obliczanie kątów nachylenia (grade) na podstawie różnicy wzniesień...")
 graph = ox.elevation.add_edge_grades(graph)
 
+
+# --- KROK 4.5: OBLICZANIE KOSZTÓW DOSTĘPNOŚCI (ACCESSIBILITY PENALTY) ---
+print("\nKROK 4.5: Obliczanie mnożnika trudności (accessibility_penalty) z wytycznych...")
+for _, _, _, data in graph.edges(keys=True, data=True):
+    penalty = 1.0
+
+    # 1. Nawierzchnia (surface)
+    surface = str(data.get("surface", "")).lower()
+    if surface in ["cobblestone", "gravel", "pebblestone", "unhewn_cobblestone", "sett"]:
+        penalty *= 2.0  # Bardzo niewygodne dla wózków
+    elif surface in ["dirt", "earth", "sand", "mud"]:
+        penalty *= 3.0  # Niemal nieprzejezdne po deszczu
+
+    # 2. Schody (highway=steps)
+    highway = str(data.get("highway", "")).lower()
+    if highway == "steps":
+        # Czy są windy lub pochylnie?
+        if data.get("elevator") == "yes":
+            penalty *= 1.5  # Oczekiwanie na windę
+        elif data.get("ramp") == "yes":
+            penalty *= 2.0  # Rampa wymaga wysiłku
+        else:
+            penalty *= 100.0  # Schody bez udogodnień = de facto blokada dla wózka!
+
+    # 3. Kąt nachylenia (grade_abs z kroku 4)
+    grade_abs = float(data.get("grade_abs", 0.0))
+    if grade_abs > 0.08:
+        penalty *= 3.0  # Powyżej 8% to stromy podjazd (bardzo trudny)
+    elif grade_abs > 0.05:
+        penalty *= 1.5  # 5-8% odczuwalny wysiłek
+
+    # Zakładamy, że cost = length * penalty
+    length = float(data.get("length", 1.0))
+    data["accessibility_penalty"] = penalty
+    data["accessibility_cost"] = length * penalty
 
 # --- KROK 5: ZAPISYWANIE WYNIKÓW ---
 print("\nKROK 5: Zapisywanie grafu oraz GeoJSONów...")
@@ -204,6 +316,8 @@ allowed_edge_cols = [
     "wheelchair",
     "incline",
     "ramp",
+    "accessibility_penalty",
+    "accessibility_cost",
 ]
 for col in gdf_edges.columns:
     if col not in allowed_edge_cols:
