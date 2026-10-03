@@ -821,7 +821,7 @@
             // Show loader
             document.getElementById('loader').style.display = 'block';
 
-            fetch('/map/api/route/', {
+            fetch('{% url "map:route_api" %}', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
@@ -830,8 +830,8 @@
             .then(data => {
                 document.getElementById('loader').style.display = 'none';
 
-                if (data.status === 'error') {
-                    alert('Błąd wyznaczania trasy: ' + data.message);
+                if (data.error || data.status === 'error') {
+                    alert('Błąd wyznaczania trasy: ' + (data.error || data.message));
                     return;
                 }
 
@@ -847,15 +847,18 @@
             // Draw polyline on map
             if (routePolyline) map.removeLayer(routePolyline);
 
-            if (data.route_geojson && data.route_geojson.coordinates) {
+            const feature = data.geojson || data.route_geojson || data;
+            const geom = feature.geometry || feature;
+
+            if (geom && geom.coordinates && geom.coordinates.length > 0) {
                 // LatLng array for Leaflet [lat, lon]
-                const latLngs = data.route_geojson.coordinates.map(c => [c[1], c[0]]);
+                const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
 
                 // Dynamic gradient or color depending on route status
                 let color = '#bd93f9';
-                if (data.summary.accessibility_status === 'Pełna Dostępność') color = '#50fa7b';
-                else if (data.summary.accessibility_status === 'Umiarkowana') color = '#f1fa8c';
-                else if (data.summary.accessibility_status === 'Trudna / Bariery') color = '#ff5555';
+                if (data.summary && data.summary.accessibility_status === 'Pełna Dostępność') color = '#50fa7b';
+                else if (data.summary && data.summary.accessibility_status === 'Umiarkowana') color = '#f1fa8c';
+                else if (data.summary && data.summary.accessibility_status === 'Trudna / Bariery') color = '#ff5555';
 
                 routePolyline = L.polyline(latLngs, {
                     color: color,
