@@ -77,7 +77,7 @@ gpd.GeoDataFrame.__init__ = patched_init
 # =============================================================================
 
 # Ustaw na True, aby testować tylko mały wycinek (np. Rynek Główny) -> błyskawiczny feedback!
-FAST_MODE = True
+FAST_MODE = False
 
 print("========== GENEROWANIE STATYCZNYCH DANYCH DLA HACKATHONU ==========")
 if FAST_MODE:
@@ -115,13 +115,37 @@ osm_network.bounding_box = krakow_bbox
 # Włączamy zachowywanie kluczowych tagów dla skrzyżowań (przeszkody i udogodnienia)
 try:
     osm_network.keep_node_info_tags.extend(
-        ["crossing", "kerb", "tactile_paving", "highway", "wheelchair", "barrier", "elevator"]
+        [
+            # Przejścia i bariery fizyczne
+            "crossing", "kerb", "tactile_paving", "barrier",
+            # Dostępność ogólna
+            "wheelchair", "elevator", "ramp", "ramp:wheelchair",
+            "step_count", "handrail", "incline",
+            # Infrastruktura węzłów (przystanki, place)
+            "highway", "lit", "bench", "shelter", "covered", "level",
+            # Systemy informacji pasażerskiej
+            "departures_board", "departures_board:speech_output",
+            "passenger_information_display",
+        ]
     )
 except AttributeError:
     pass
 
 nodes_gdf, edges_gdf = osm_network.get_network(
-    network_type="walking", nodes=True, extra_attributes=["surface", "smoothness", "wheelchair", "incline", "ramp"]
+    network_type="walking",
+    nodes=True,
+    extra_attributes=[
+        # Nawierzchnia (kluczowe dla wózków — patrz surface_types_analysis.md)
+        "surface", "smoothness",
+        # Dostępność ogólna krawędzi
+        "wheelchair", "incline", "ramp",
+        # Dodatkowe atrybuty fizyczne
+        "step_count", "handrail", "width",
+        # Oświetlenie i komfort
+        "lit",
+        # Tagi barierowe
+        "kerb", "tactile_paving",
+    ],
 )
 
 # Przekształcamy na graf NetworkX
@@ -167,6 +191,11 @@ try:
         "kerb": [True, "raised", "lowered", "flush", "rolled", "no", "unknown"],
         "crossing": [True, "unmarked", "zebra", "marked", "traffic_signals", "island", "no"],
         "tactile_paving": [True, "yes", "no", "partial", "unknown"],
+        # Nowe kategorie z analizy tagów dostępności
+        "elevator": [True, "yes"],           # windy — kluczowe przy level<0
+        "lit": [True, "yes", "no"],          # oświetlenie przejść/platform
+        "bench": [True, "yes", "no"],        # miejsca do siedzenia
+        "shelter": [True, "yes", "no"],      # zadaszenia (przystanki)
     }
 
     det_list = []
@@ -215,10 +244,22 @@ try:
             "osm_id",
             "osm_type",
             "type",
+            # Tagi barierowe przejść
             "kerb",
             "crossing",
             "tactile_paving",
+            # Dostępność ogólna
             "wheelchair",
+            # Infrastruktura budynków / platform
+            "elevator",
+            "lit",
+            "bench",
+            "shelter",
+            "level",
+            # Informacja pasażerska
+            "departures_board",
+            "passenger_information_display",
+            # Identyfikacja
             "name",
             "highway",
             "tags",
@@ -265,30 +306,63 @@ print("\nKROK 4.5: Obliczanie mnożnika trudności (accessibility_penalty) z wyt
 for _, _, _, data in graph.edges(keys=True, data=True):
     penalty = 1.0
 
-    # 1. Nawierzchnia (surface)
+    # 1. Nawierzchnia (surface) — wg surface_types_analysis.md
     surface = str(data.get("surface", "")).lower()
-    if surface in ["cobblestone", "gravel", "pebblestone", "unhewn_cobblestone", "sett"]:
-        penalty *= 2.0  # Bardzo niewygodne dla wózków
-    elif surface in ["dirt", "earth", "sand", "mud"]:
-        penalty *= 3.0  # Niemal nieprzejezdne po deszczu
+    # 🔴 Ekstremalne przeszkody (mnożnik ∞ lub bardzo wysoki)
+    if surface in ["sand", "mud"]:
+        penalty *= 5.0  # Niemal nieprzejezdne, wózek grzęźnie
+    elif surface in ["pebblestone", "stepping_stones", "metal_grid"]:
+        penalty *= 4.0  # Wysokie ryzyko utknięcia / upadku
+    elif surface in ["cobblestone", "unhewn_cobblestone"]:
+        penalty *= 3.0  # Kocie łby — ból i ryzyko wywrócenia
+    # 🟡 Wyboiste i trudne
+    elif surface in ["sett", "gravel", "grass_paver"]:
+        penalty *= 2.5  # Duże opory toczenia
+    elif surface in ["dirt", "earth", "ground", "unpaved", "fine_gravel"]:
+        penalty *= 2.0  # Zależy od pogody, trudne przy wilgoci
+    elif surface in ["grass"]:
+        penalty *= 2.0  # Miękkie, trudne dla małych kółek
+    # 🟢 Dobre (brak kary)
+    # asphalt, paving_stones, paved, concrete, compacted, concrete:plates -> penalty=1.0
 
-    # 2. Schody (highway=steps)
+    # 2. Gładkość (smoothness) — doprecyzowanie ponad surface
+    smoothness = str(data.get("smoothness", "")).lower()
+    if smoothness in ["horrible", "very_bad"]:
+        penalty *= 3.0
+    elif smoothness in ["bad"]:
+        penalty *= 2.0
+    elif smoothness in ["intermediate"]:
+        penalty *= 1.5
+    # excellent, good -> brak kary
+
+    # 3. Schody (highway=steps)
     highway = str(data.get("highway", "")).lower()
     if highway == "steps":
-        # Czy są windy lub pochylnie?
-        if data.get("elevator") == "yes":
-            penalty *= 1.5  # Oczekiwanie na windę
-        elif data.get("ramp") == "yes":
-            penalty *= 2.0  # Rampa wymaga wysiłku
+        step_count = int(data.get("step_count", 0) or 0)
+        has_elevator = data.get("elevator") == "yes"
+        has_ramp = data.get("ramp") == "yes" or data.get("ramp:wheelchair") == "yes"
+        has_handrail = data.get("handrail") == "yes"
+        if has_elevator:
+            penalty *= 1.5   # Winda dostępna — opóźnienie oczekiwania
+        elif has_ramp:
+            penalty *= 2.0   # Rampa — wymaga wysiłku, ale przejezdna
+        elif has_handrail and step_count <= 3:
+            penalty *= 5.0   # Mało stopni z poręczą — trudne, ale możliwe
         else:
-            penalty *= 100.0  # Schody bez udogodnień = de facto blokada dla wózka!
+            penalty *= 100.0  # Schody bez udogodnień = blokada dla wózka!
 
-    # 3. Kąt nachylenia (grade_abs z kroku 4)
+    # 4. Kąt nachylenia (grade_abs z kroku 4)
     grade_abs = float(data.get("grade_abs", 0.0))
-    if grade_abs > 0.08:
-        penalty *= 3.0  # Powyżej 8% to stromy podjazd (bardzo trudny)
+    if grade_abs > 0.12:
+        penalty *= 5.0   # >12% — praktycznie nie do pokonania bez asysty
+    elif grade_abs > 0.08:
+        penalty *= 3.0   # >8%  — stromy podjazd, bardzo trudny
     elif grade_abs > 0.05:
-        penalty *= 1.5  # 5-8% odczuwalny wysiłek
+        penalty *= 1.5   # 5–8% — odczuwalny wysiłek
+
+    # 5. Oświetlenie (lit) — opcjonalny mnożnik dla trybu nocnego
+    # Nie zmienia kosztu domyślnie, ale zapisujemy jako atrybut do filtrowania na frontendzie
+    data["lit"] = str(data.get("lit", ""))
 
     # Zakładamy, że cost = length * penalty
     length = float(data.get("length", 1.0))
@@ -316,6 +390,13 @@ allowed_edge_cols = [
     "wheelchair",
     "incline",
     "ramp",
+    "ramp:wheelchair",
+    "step_count",
+    "handrail",
+    "width",
+    "kerb",
+    "tactile_paving",
+    "lit",
     "accessibility_penalty",
     "accessibility_cost",
 ]
