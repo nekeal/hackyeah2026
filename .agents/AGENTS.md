@@ -12,7 +12,7 @@ Each Django app MUST follow this specific file layout to reduce merge conflicts:
 - `models.py`: STRICTLY database fields and constraints. **No business logic.**
 - `services.py`: All business logic and write operations (creating/updating/deleting records).
 - `selectors.py`: All read operations and complex database queries (fetching records).
-- `apis.py` / `views.py`: Only parsing requests, delegating to services/selectors, and returning responses.
+- `apis.py` / `views.py` (or `apis/` / `views/` packages): Only parsing requests, delegating to services/selectors, and returning responses. If there are multiple unrelated classes or functions, split them into a Python package (e.g., `views/museums.py`, `views/tracks.py`, `views/__init__.py`).
 - `tests/` (Directory): Isolated test files (e.g., `test_models.py`, `test_services.py`, `test_apis.py`). Do NOT use a single `tests.py` file.
 
 ## 3. Collaboration & Edits
