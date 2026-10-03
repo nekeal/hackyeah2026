@@ -45,8 +45,10 @@ def test_calculate_route_valid():
     res = calculate_route(start_lat, start_lon, end_lat, end_lon, options={"max_slope": 8.0, "allow_stairs": False})
 
     assert "geojson" in res
-    assert res["geojson"]["type"] == "Feature"
-    assert len(res["geojson"]["geometry"]["coordinates"]) > 1
+    coords = res["geojson"]["geometry"]["coordinates"]
+    assert len(coords) > 1
+    assert coords[0][:2] == [round(start_lon, 6), round(start_lat, 6)]
+    assert coords[-1][:2] == [round(end_lon, 6), round(end_lat, 6)]
 
     summary = res["summary"]
     assert summary["total_distance_m"] > 0

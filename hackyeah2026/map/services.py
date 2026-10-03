@@ -455,6 +455,92 @@ def _process_route_segments(
     return instructions, total_distance, total_elevation_gain, max_slope_in_route, total_slope_sum, counts
 
 
+def _haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    r = 6371000.0  # Earth radius in meters
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    delta_phi = math.radians(lat2 - lat1)
+    delta_lambda = math.radians(lon2 - lon1)
+
+    a = math.sin(delta_phi / 2.0) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(delta_lambda / 2.0) ** 2
+    c = 2.0 * math.atan2(math.sqrt(a), math.sqrt(1.0 - a))
+    return r * c
+
+
+def _snap_start_end_coords(
+    start_lat: float,
+    start_lon: float,
+    end_lat: float,
+    end_lon: float,
+    sn_coords: tuple[float, float, float],
+    en_coords: tuple[float, float, float],
+    route_coords: list[list[float]],
+    instructions: list[dict[str, Any]],
+    total_distance: float,
+) -> float:
+    sn_lat, sn_lon, sn_elev = sn_coords
+    en_lat, en_lon, en_elev = en_coords
+
+    dist_start_snap = _haversine_distance(start_lat, start_lon, sn_lat, sn_lon)
+    dist_end_snap = _haversine_distance(en_lat, en_lon, end_lat, end_lon)
+
+    start_point = [round(start_lon, 6), round(start_lat, 6), round(sn_elev, 1)]
+    if dist_start_snap > 0.5:
+        if not route_coords or route_coords[0][:2] != start_point[:2]:
+            route_coords.insert(0, start_point)
+            total_distance += dist_start_snap
+            if dist_start_snap >= 2.0:
+                instructions.insert(
+                    0,
+                    {
+                        "step_number": 1,
+                        "street_name": "Dojście do sieci tras",
+                        "distance_m": round(dist_start_snap, 1),
+                        "surface": "Utwardzona",
+                        "max_slope_pct": 0.0,
+                        "has_stairs": False,
+                        "has_ramp": False,
+                        "has_elevator": False,
+                        "kerb_status": "brak danych",
+                        "warning": None,
+                        "has_warning": False,
+                        "edge_ids": [],
+                        "coords": [
+                            start_point,
+                            [round(sn_lon, 6), round(sn_lat, 6), round(sn_elev, 1)],
+                        ],
+                    },
+                )
+
+    end_point = [round(end_lon, 6), round(end_lat, 6), round(en_elev, 1)]
+    if dist_end_snap > 0.5:
+        if not route_coords or route_coords[-1][:2] != end_point[:2]:
+            route_coords.append(end_point)
+            total_distance += dist_end_snap
+            if dist_end_snap >= 2.0:
+                instructions.append(
+                    {
+                        "step_number": len(instructions) + 1,
+                        "street_name": "Dojście do celu",
+                        "distance_m": round(dist_end_snap, 1),
+                        "surface": "Utwardzona",
+                        "max_slope_pct": 0.0,
+                        "has_stairs": False,
+                        "has_ramp": False,
+                        "has_elevator": False,
+                        "kerb_status": "brak danych",
+                        "warning": None,
+                        "has_warning": False,
+                        "edge_ids": [],
+                        "coords": [
+                            [round(en_lon, 6), round(en_lat, 6), round(en_elev, 1)],
+                            end_point,
+                        ],
+                    }
+                )
+
+    return total_distance
+
+
 def calculate_route(
     start_lat: float,
     start_lon: float,
@@ -481,6 +567,23 @@ def calculate_route(
     instructions, total_distance, total_elevation_gain, max_slope_in_route, total_slope_sum, counts = (
         _process_route_segments(edges_data, max_slope_limit)
     )
+
+    sn_coords = get_node_coordinates(start_node)
+    en_coords = get_node_coordinates(end_node)
+
+    total_distance = _snap_start_end_coords(
+        start_lat,
+        start_lon,
+        end_lat,
+        end_lon,
+        sn_coords,
+        en_coords,
+        route_coords,
+        instructions,
+        total_distance,
+    )
+
+    _format_instructions(instructions)
 
     if counts["stairs"] == 0 and counts["high_slope"] == 0 and counts["cobblestone"] == 0:
         status_label, status_code = "Pełna dostępność (trasa bez barier)", "accessible"
