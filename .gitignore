@@ -108,3 +108,12 @@ GitHub.sublime-settings
 
 # Files marked to ignore #
 *.ignore
+
+# Hackathon Data Files (Do not commit heavy files!)
+*.osm
+*.osm.pbf
+*.graphml
+*.geojson
+*.tif
+cache/
+.dmypy.json
