@@ -93,3 +93,16 @@ def test_calc_slope_penalty():
     # Above limit + 0.5% tolerance -> blocked
     assert math.isinf(_calc_slope_penalty(0.11, 0.06))
     assert math.isinf(_calc_slope_penalty(0.07, 0.06))
+
+
+@pytest.mark.django_db
+def test_calculate_route_stairs_avoidance():
+    clear_graph_cache()
+    # Route that has no stairs option
+    res = calculate_route(50.0617, 19.9373, 50.0645, 19.9413, options={"allow_stairs": False})
+    assert res["summary"]["is_relaxed"] is False
+    assert not any(inst.get("has_stairs") for inst in res["instructions"])
+
+    # Route that requires stairs when no step-free path exists
+    res_stairs = calculate_route(50.05958, 19.93703, 50.05923, 19.93728, options={"allow_stairs": False})
+    assert res_stairs["summary"]["is_relaxed"] is True

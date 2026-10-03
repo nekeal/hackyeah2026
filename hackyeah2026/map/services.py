@@ -96,8 +96,28 @@ def translate_highway(highway: Any) -> str:
     return " / ".join(unique_translated)
 
 
+def _is_steps_edge(data: dict[str, Any]) -> bool:
+    hw = data.get("highway")
+    if hw:
+        if isinstance(hw, (list, tuple, set)):
+            if any(str(item).lower() == "steps" for item in hw):
+                return True
+        elif "steps" in str(hw).lower():
+            return True
+
+    footway = data.get("footway")
+    if footway and "steps" in str(footway).lower():
+        return True
+
+    stairs = data.get("stairs")
+    if stairs and str(stairs).lower() in ("yes", "true", "1"):
+        return True
+
+    return False
+
+
 def _calc_stairs_penalty(
-    highway: str,
+    is_steps: bool,
     has_elevator: bool,
     has_ramp: bool,
     allow_stairs: bool,
@@ -105,7 +125,7 @@ def _calc_stairs_penalty(
     allow_ramps: bool,
     excluded_barriers: set[str],
 ) -> float:
-    if highway != "steps":
+    if not is_steps:
         return 1.0
 
     if "stairs" in excluded_barriers:
@@ -137,7 +157,7 @@ def _calc_slope_penalty(
 
 
 def _calc_surface_penalty(
-    surface: str,
+    surface_raw: Any,
     avoid_cobblestone: bool,
     excluded_barriers: set[str],
 ) -> float:
@@ -152,11 +172,21 @@ def _calc_surface_penalty(
         "dirt",
         "mud",
     }
-    if surface not in cobblestone_surfaces:
+
+    surfaces: list[str] = []
+    if isinstance(surface_raw, (list, tuple, set)):
+        surfaces = [str(s).lower() for s in surface_raw]
+    elif surface_raw:
+        surfaces = [
+            s.strip().lower() for s in str(surface_raw).replace("[", "").replace("]", "").replace("'", "").split(",")
+        ]
+
+    is_cobble = any(s in cobblestone_surfaces for s in surfaces)
+    if not is_cobble:
         return 1.0
 
     if "cobblestone" in excluded_barriers or avoid_cobblestone:
-        if surface in ("sand", "mud"):
+        if any(s in ("sand", "mud") for s in surfaces):
             return math.inf
         return 15.0
 
@@ -193,40 +223,51 @@ def _build_weight_function(options: dict[str, Any]):
     excluded_edge_ids = {(str(item[0]), str(item[1])) for item in excluded_edge_list if len(item) == 2}
     excluded_barriers = set(options.get("excluded_barriers", []))
 
-    def weight_func(u: Any, v: Any, data: dict[str, Any]) -> float:
+    def weight_func(u: Any, v: Any, edge_dict: dict[str, Any]) -> float:
         str_u, str_v = str(u), str(v)
         if str_u in excluded_node_ids or str_v in excluded_node_ids:
             return math.inf
         if (str_u, str_v) in excluded_edge_ids or (str_v, str_u) in excluded_edge_ids:
             return math.inf
 
-        length = float(data.get("length", 1.0) or 1.0)
-        highway = str(data.get("highway", "")).lower()
-        surface = str(data.get("surface", "")).lower()
-        grade_abs = float(data.get("grade_abs", 0.0) or 0.0)
+        min_edge_weight = math.inf
+        # In NetworkX MultiDiGraph, edge_dict is AtlasView/dict mapping keys to edge data dicts
+        if hasattr(edge_dict, "values") and "length" not in edge_dict and "highway" not in edge_dict:
+            edges_to_evaluate = list(edge_dict.values())
+        else:
+            edges_to_evaluate = [edge_dict]
 
-        ramp_attr = data.get("ramp")
-        ramp_wheel_attr = data.get("ramp:wheelchair")
-        has_ramp = (ramp_attr in ("yes", True, "1")) or (ramp_wheel_attr in ("yes", True, "1"))
-        has_elevator = data.get("elevator") in ("yes", True, "1")
+        for data in edges_to_evaluate:
+            length = float(data.get("length", 1.0) or 1.0)
+            grade_abs = float(data.get("grade_abs", 0.0) or 0.0)
+            is_steps = _is_steps_edge(data)
 
-        stairs_p = _calc_stairs_penalty(
-            highway, has_elevator, has_ramp, allow_stairs, allow_elevators, allow_ramps, excluded_barriers
-        )
-        if math.isinf(stairs_p):
-            return math.inf
+            ramp_attr = data.get("ramp")
+            ramp_wheel_attr = data.get("ramp:wheelchair")
+            has_ramp = (ramp_attr in ("yes", True, "1")) or (ramp_wheel_attr in ("yes", True, "1"))
+            has_elevator = data.get("elevator") in ("yes", True, "1")
 
-        slope_p = _calc_slope_penalty(grade_abs, max_slope_ratio, allow_stairs, excluded_barriers)
-        if math.isinf(slope_p):
-            return math.inf
+            stairs_p = _calc_stairs_penalty(
+                is_steps, has_elevator, has_ramp, allow_stairs, allow_elevators, allow_ramps, excluded_barriers
+            )
+            if math.isinf(stairs_p):
+                continue
 
-        surf_p = _calc_surface_penalty(surface, avoid_cobblestone, excluded_barriers)
-        if math.isinf(surf_p):
-            return math.inf
+            slope_p = _calc_slope_penalty(grade_abs, max_slope_ratio, allow_stairs, excluded_barriers)
+            if math.isinf(slope_p):
+                continue
 
-        narrow_p = _calc_narrow_penalty(data.get("width"), avoid_narrow)
+            surf_p = _calc_surface_penalty(data.get("surface"), avoid_cobblestone, excluded_barriers)
+            if math.isinf(surf_p):
+                continue
 
-        return length * stairs_p * slope_p * surf_p * narrow_p
+            narrow_p = _calc_narrow_penalty(data.get("width"), avoid_narrow)
+
+            w = length * stairs_p * slope_p * surf_p * narrow_p
+            if w < min_edge_weight:
+                min_edge_weight = w
+
+        return min_edge_weight
 
     return weight_func
 
@@ -266,7 +307,9 @@ def _extract_path_edges(graph: Any, path_nodes: list[Any]) -> tuple[list[list[fl
 def _find_path(graph: Any, start_node: Any, end_node: Any, options: dict[str, Any]) -> tuple[list[Any], bool]:
     weight_fn = _build_weight_function(options)
     try:
-        _, path_nodes = nx.bidirectional_dijkstra(graph, start_node, end_node, weight=weight_fn)
+        dist, path_nodes = nx.bidirectional_dijkstra(graph, start_node, end_node, weight=weight_fn)
+        if math.isinf(dist):
+            raise nx.NetworkXNoPath("Strict path has infinite weight")
         return path_nodes, False
     except nx.NetworkXNoPath, nx.NodeNotFound:
         relaxed = dict(options)
@@ -277,7 +320,9 @@ def _find_path(graph: Any, start_node: Any, end_node: Any, options: dict[str, An
         relaxed_weight_fn = _build_weight_function(relaxed)
 
         try:
-            _, path_nodes = nx.bidirectional_dijkstra(graph, start_node, end_node, weight=relaxed_weight_fn)
+            relaxed_dist, path_nodes = nx.bidirectional_dijkstra(graph, start_node, end_node, weight=relaxed_weight_fn)
+            if math.isinf(relaxed_dist):
+                raise NoRouteFoundError("Nie znaleziono dostępnego połączenia drogowego pomiędzy podanymi punktami.")
             return path_nodes, True
         except (nx.NetworkXNoPath, nx.NodeNotFound) as err:
             raise NoRouteFoundError(
