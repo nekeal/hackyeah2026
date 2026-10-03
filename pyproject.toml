@@ -13,6 +13,7 @@ dependencies = [
     "ipython",
     "environs",
     "pyyaml",
+    "srtm-py>=0.3.7",
 ]
 
 [dependency-groups]

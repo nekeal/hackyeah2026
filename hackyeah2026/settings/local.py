@@ -9,3 +9,5 @@ DATABASES = {
         "NAME": BASE_DIR / "db.sqlite3",
     }
 }
+
+SECURE_REFERRER_POLICY = "origin-when-cross-origin"
