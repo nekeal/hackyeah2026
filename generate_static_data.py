@@ -97,12 +97,13 @@ except Exception as e:
 
 # --- KROK 2: POBRANIE SIATKI DROGOWEJ (DLA PIESZYCH) ---
 print("\nKROK 2: Pobieranie siatki ścieżek (walk) z LOKALNEGO pliku PBF (offline)...")
-# Wycinamy siatkę bezpośrednio z pobranego PBF, by ominąć limity i timeouty publicznego API Overpass
-osm.bounding_box = krakow_bbox
-nodes_gdf, edges_gdf = osm.get_network(network_type="walking", nodes=True)
+# Tworzymy nową instancję OSM, aby uniknąć błędów stanu po wcześniejszym filtrowaniu
+osm_network = OSM(pbf_filename)
+osm_network.bounding_box = krakow_bbox
+nodes_gdf, edges_gdf = osm_network.get_network(network_type="walking", nodes=True)
 
 # Przekształcamy na graf NetworkX
-graph_nx = osm.to_graph(nodes_gdf, edges_gdf, graph_type="networkx", direction="oneway")
+graph_nx = osm_network.to_graph(nodes_gdf, edges_gdf, graph_type="networkx", direction="oneway")
 # OSMnx oczekuje MultiDiGraph, więc rzutujemy graf
 graph = nx.MultiDiGraph(graph_nx)
 
