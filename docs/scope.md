@@ -71,3 +71,4 @@ System map do wyszukiwania tras dla osób poruszających się na wózkach z wysp
 - Dodanie utrudnienia (wybrane jedne schody) -> wyznaczenie nowej trasy
 - Nawigacja przez trasę
 - Zgłoszenie utrudnienia -> wyznaczenie nowej trasy dla użytkownika z uwzględnieniem jego zgłoszenia (objazd)
+- uwzględnic torowiska
