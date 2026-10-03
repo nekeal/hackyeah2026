@@ -4,6 +4,7 @@ FROM python:3.14-slim as backend-base
 ENV PYTHONDONTWRITEBYTECODE 1 \
     PYTHONUNBUFFERED 1
 WORKDIR /app
+ENV PATH="/app/.venv/bin:$PATH"
 
 # Install uv package manager
 RUN pip install --upgrade pip uv
@@ -17,4 +18,4 @@ FROM backend-base as production
 COPY pyproject.toml uv.lock ./
 RUN --mount=type=cache,target=/root/.cache/uv uv sync --no-dev --group prod
 ADD . ./
-RUN python manage.py collectstatic --noinput
+RUN uv run python manage.py collectstatic --noinput
