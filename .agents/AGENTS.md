@@ -2,6 +2,8 @@
 
 This project is a multi-agent, multi-person hackathon project. To prevent conflicts, merge issues, and ensure a high standard of code, all AI agents MUST strictly adhere to the following architectural and behavioral rules:
 
+> **CRITICAL**: Before starting any feature, you MUST read `REQUIREMENTS.md` to ensure your design complies with the Hackathon's strict evaluation criteria (WCAG accessibility, data provenance, etc.).
+
 ## 1. Modular Monolith Architecture
 - **Vertical Slices**: All new features must be placed into independent, domain-driven Django apps (e.g., `accounts`, `rentals`, `catalog`).
 - **No Direct DB Mutations in APIs**: Views and API endpoints (`apis.py` or `views.py`) must never call `.save()`, `.create()`, or `.update()`. They must delegate to a function in `services.py`.
