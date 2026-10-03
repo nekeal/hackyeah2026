@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kraków Bez Barier – Dostępne POI</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+    <style>
+        :root {
+            --bg-dark:   #1e1e2e;
+            --panel-bg:  #282a36;
+            --panel2:    #313244;
+            --text:      #f8f8f2;
+            --accent:    #bd93f9;
+            --green:     #50fa7b;
+            --yellow:    #f1fa8c;
+            --red:       #ff5555;
+            --blue:      #8be9fd;
+            --orange:    #ffb86c;
+            --pink:      #ff79c6;
+            --muted:     #6272a4;
+            --border:    #44475a;
+            --sidebar-w: 300px;
+            --drawer-w:  360px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body, html {
+            margin: 0; padding: 0;
+            height: 100%; overflow: hidden;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+        }
+
+        /* ════════════════ SIDEBAR (filters, left) ══════════════════ */
+        #sidebar {
+            position: fixed;
+            top: 0; left: 0;
+            width: var(--sidebar-w);
+            height: 100vh;
+            background: var(--panel-bg);
+            padding: 18px 14px;
+            box-shadow: 2px 0 10px rgba(0,0,0,.5);
+            z-index: 1100;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        #sidebar h1 {
+            font-size: 1.2rem;
+            margin: 0 0 2px;
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
+        #poi-count { font-size: .8rem; color: var(--muted); margin-top: -6px; }
+
+        .filter-group {
+            background: var(--border);
+            padding: 10px 12px;
+            border-radius: 8px;
+        }
+        .filter-group h3 {
+            margin: 0 0 8px;
+            font-size: .88rem;
+            color: var(--accent);
+        }
+        .filter-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 6px;
+            cursor: pointer;
+            font-size: .84rem;
+            user-select: none;
+        }
+        .filter-label:last-child { margin-bottom: 0; }
+        .filter-label input[type="checkbox"] {
+            accent-color: var(--accent);
+            transform: scale(1.15);
+            cursor: pointer; flex-shrink: 0;
+        }
+        .dot {
+            width: 11px; height: 11px;
+            border-radius: 50%; flex-shrink: 0;
+            border: 2px solid rgba(255,255,255,.2);
+        }
+        .dc-restaurant { background: #ff6e6e; }
+        .dc-cafe       { background: #ffb86c; }
+        .dc-pharmacy   { background: #50fa7b; }
+        .dc-toilets    { background: #8be9fd; }
+        .dc-tourism    { background: #bd93f9; }
+        .dc-transport  { background: #f1fa8c; }
+        .dc-shop       { background: #ff79c6; }
+        .dc-historic   { background: #a4c2f4; }
+        .dc-other      { background: #6272a4; }
+
+        #toggle-all {
+            background: transparent;
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            border-radius: 5px;
+            padding: 5px 10px;
+            font-size: .8rem;
+            cursor: pointer;
+            width: 100%;
+            transition: background .2s;
+        }
+        #toggle-all:hover { background: rgba(189,147,249,.15); }
+
+        .sidebar-footer {
+            font-size: .72rem;
+            color: var(--muted);
+            margin-top: auto;
+            line-height: 1.5;
+        }
+
+        /* ════════════════ MAP ══════════════════════════════════════ */
+        #map {
+            position: absolute;
+            top: 0;
+            left: var(--sidebar-w);
+            right: 0;
+            bottom: 0;
+        }
+
+        /* ════════════════ DETAILS DRAWER ═══════════════════════════
+           Desktop : slides in from the right
+           Mobile  : slides up from the bottom                       */
+        #drawer {
+            position: fixed;
+            background: var(--panel-bg);
+            z-index: 1200;
+            overflow-y: auto;
+            transition: transform .32s cubic-bezier(.4,0,.2,1),
+                        box-shadow .32s ease;
+
+            /* ── Desktop (right panel) ── */
+            top: 0;
+            right: 0;
+            width: var(--drawer-w);
+            height: 100vh;
+            transform: translateX(100%);
+            box-shadow: -4px 0 24px rgba(0,0,0,.6);
+            border-left: 1px solid var(--border);
+            border-radius: 0;
+        }
+
+        #drawer.open {
+            transform: translateX(0);
+        }
+
+        /* ── Mobile override ── */
+        @media (max-width: 700px) {
+            #sidebar {
+                /* hide sidebar on mobile; filters via a toggle button */
+                transform: translateX(-100%);
+                transition: transform .3s ease;
+            }
+            #sidebar.mobile-open { transform: translateX(0); }
+
+            #map { left: 0; }
+
+            #drawer {
+                top: auto;
+                left: 0; right: 0;
+                width: 100%;
+                height: 70vh;
+                transform: translateY(100%);
+                box-shadow: 0 -4px 24px rgba(0,0,0,.7);
+                border-left: none;
+                border-top: 1px solid var(--border);
+                border-radius: 16px 16px 0 0;
+            }
+            #drawer.open { transform: translateY(0); }
+
+            /* drag handle */
+            #drawer-handle {
+                display: block;
+            }
+
+            #mobile-filter-btn { display: flex; }
+        }
+
+        /* Drawer inner layout */
+        #drawer-inner {
+            padding: 20px 18px 40px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Drag handle (mobile only) */
+        #drawer-handle {
+            display: none;
+            width: 40px; height: 4px;
+            background: var(--border);
+            border-radius: 2px;
+            margin: 12px auto 0;
+            cursor: grab;
+        }
+
+        /* Close button */
+        #drawer-close {
+            position: absolute;
+            top: 14px; right: 14px;
+            background: var(--border);
+            border: none;
+            color: var(--text);
+            border-radius: 50%;
+            width: 32px; height: 32px;
+            font-size: 1rem;
+            cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: background .2s;
+            z-index: 1;
+        }
+        #drawer-close:hover { background: var(--panel2); }
+
+        /* Drawer header */
+        .drawer-name {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text);
+            margin: 0;
+            padding-right: 36px;
+            line-height: 1.3;
+        }
+        .drawer-type {
+            font-size: .8rem;
+            color: var(--muted);
+            margin-top: 2px;
+        }
+        .drawer-address {
+            font-size: .84rem;
+            color: var(--muted);
+        }
+
+        /* Section heading inside drawer */
+        .dsection {
+            margin: 0;
+        }
+        .dsection-title {
+            font-size: .72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: .08em;
+            color: var(--muted);
+            margin: 0 0 8px;
+        }
+
+        /* Accessibility chips / badges */
+        .a11y-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+        .a11y-chip {
+            background: var(--panel2);
+            border-radius: 8px;
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .a11y-chip .chip-label {
+            font-size: .7rem;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: .05em;
+        }
+        .a11y-chip .chip-value {
+            font-size: .88rem;
+            font-weight: 600;
+            color: var(--text);
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .chip-yes   { color: var(--green)  !important; }
+        .chip-no    { color: var(--red)    !important; }
+        .chip-limit { color: var(--yellow) !important; }
+
+        /* Full-width description block */
+        .a11y-desc {
+            background: var(--panel2);
+            border-left: 3px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 10px 12px;
+            font-size: .85rem;
+            line-height: 1.6;
+            color: var(--text);
+            font-style: italic;
+        }
+
+        /* Info rows (hours, phone, website) */
+        .info-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            font-size: .86rem;
+            line-height: 1.5;
+        }
+        .info-row .info-icon { font-size: 1rem; flex-shrink: 0; }
+        .info-row a { color: var(--blue); text-decoration: none; }
+        .info-row a:hover { text-decoration: underline; }
+
+        /* Divider */
+        .drawer-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 2px 0;
+        }
+
+        /* OSM link */
+        .osm-link {
+            font-size: .75rem;
+            color: var(--muted);
+            text-align: right;
+            margin-top: 4px;
+        }
+        .osm-link a { color: var(--muted); }
+        .osm-link a:hover { color: var(--accent); }
+
+        /* ── Mobile filter button ── */
+        #mobile-filter-btn {
+            display: none;
+            position: fixed;
+            bottom: 20px;
+            left: 14px;
+            z-index: 1300;
+            background: var(--accent);
+            color: #1e1e2e;
+            border: none;
+            border-radius: 24px;
+            padding: 10px 18px;
+            font-size: .9rem;
+            font-weight: 700;
+            cursor: pointer;
+            align-items: center;
+            gap: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,.4);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ═══ FILTER SIDEBAR ═══════════════════════════════════════════ -->
+    <div id="sidebar" role="navigation" aria-label="Filtry kategorii">
+        <h1>♿ Dostępne POI</h1>
+        <p id="poi-count">Wczytywanie…</p>
+
+        <button id="toggle-all">Zaznacz / odznacz wszystkie</button>
+
+        <div class="filter-group">
+            <h3>🍽️ Gastronomia</h3>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="restaurant" checked><span class="dot dc-restaurant"></span> Restauracje</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="cafe"       checked><span class="dot dc-cafe"></span> Kawiarnie</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="fast_food"  checked><span class="dot dc-restaurant"></span> Fast food</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pub"        checked><span class="dot dc-cafe"></span> Puby / Bary</label>
+        </div>
+
+        <div class="filter-group">
+            <h3>🏛️ Atrakcje i kultura</h3>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="tourism" checked><span class="dot dc-tourism"></span> Muzea / Hotele / Atrakcje</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="historic" checked><span class="dot dc-historic"></span> Zabytki / Pomniki</label>
+        </div>
+
+        <div class="filter-group">
+            <h3>🚌 Transport</h3>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="transport" checked><span class="dot dc-transport"></span> Przystanki / Stacje</label>
+        </div>
+
+        <div class="filter-group">
+            <h3>🏪 Usługi</h3>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pharmacy" checked><span class="dot dc-pharmacy"></span> Apteki</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="toilets"  checked><span class="dot dc-toilets"></span> Toalety</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="shop"     checked><span class="dot dc-shop"></span> Sklepy</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="other"    checked><span class="dot dc-other"></span> Inne</label>
+        </div>
+
+        <div class="sidebar-footer">
+            Dane: OpenStreetMap contributors.<br>
+            Pokazuje POI z <code>wheelchair=yes</code>.
+        </div>
+    </div>
+
+    <!-- ═══ MAP ══════════════════════════════════════════════════════ -->
+    <div id="map" role="main" aria-label="Mapa dostępnych miejsc"></div>
+
+    <!-- ═══ DETAILS DRAWER ══════════════════════════════════════════ -->
+    <aside id="drawer" role="complementary" aria-label="Szczegóły miejsca" aria-hidden="true">
+        <div id="drawer-handle" aria-hidden="true"></div>
+        <button id="drawer-close" aria-label="Zamknij panel">✕</button>
+        <div id="drawer-inner">
+            <!-- filled by JS -->
+        </div>
+    </aside>
+
+    <!-- ═══ MOBILE FILTER BUTTON ═══════════════════════════════════ -->
+    <button id="mobile-filter-btn" aria-label="Pokaż filtry">
+        🔍 Filtry
+    </button>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+    // ── Map init ─────────────────────────────────────────────────────
+    const map = L.map('map', { zoomControl: true }).setView([50.0614, 19.9365], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        maxZoom: 20
+    }).addTo(map);
+    setTimeout(() => map.invalidateSize(), 200);
+    window.addEventListener('load', () => map.invalidateSize());
+
+    // ── Category detection ────────────────────────────────────────────
+    const AMENITY_MAP = {
+        restaurant:'restaurant', cafe:'cafe', fast_food:'fast_food',
+        pub:'pub', bar:'pub', pharmacy:'pharmacy',
+        toilets:'toilets', drinking_water:'toilets',
+    };
+    const TOURISM_TYPES  = new Set(['museum','hotel','attraction','gallery','viewpoint','artwork','information']);
+    const HISTORIC_TYPES = new Set(['memorial','statue','monument','ruins','castle','archaeological_site']);
+
+    function getCategory(props) {
+        const t = props.tags || {};
+        if (t.amenity && AMENITY_MAP[t.amenity]) return AMENITY_MAP[t.amenity];
+        if (t.shop) return 'shop';
+        if (t.tourism  && TOURISM_TYPES.has(t.tourism))  return 'tourism';
+        if (t.historic && HISTORIC_TYPES.has(t.historic)) return 'historic';
+        if (t.public_transport || t.railway === 'station' || t.railway === 'tram_stop'
+            || t.bus === 'yes' || t.tram === 'yes') return 'transport';
+        return 'other';
+    }
+
+    // ── Marker styling ────────────────────────────────────────────────
+    const COLORS = {
+        restaurant:'#ff6e6e', cafe:'#ffb86c', fast_food:'#ff6e6e', pub:'#ffb86c',
+        pharmacy:'#50fa7b', toilets:'#8be9fd', tourism:'#bd93f9',
+        historic:'#a4c2f4', transport:'#f1fa8c', shop:'#ff79c6', other:'#6272a4',
+    };
+    const ICONS = {
+        restaurant:'🍽️', cafe:'☕', fast_food:'🍔', pub:'🍺',
+        pharmacy:'💊', toilets:'🚻', tourism:'🏛️',
+        historic:'🗿', transport:'🚌', shop:'🛍️', other:'📍',
+    };
+
+    function makeIcon(cat) {
+        const color = COLORS[cat] || COLORS.other;
+        const emoji = ICONS[cat] || '📍';
+        const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+            <ellipse cx="14" cy="34" rx="6" ry="2" fill="rgba(0,0,0,0.25)"/>
+            <path d="M14 0C8.477 0 4 4.477 4 10c0 7.5 10 24 10 24S24 17.5 24 10C24 4.477 19.523 0 14 0z"
+                  fill="${color}" stroke="rgba(0,0,0,0.4)" stroke-width="1.5"/>
+            <text x="14" y="15" text-anchor="middle" font-size="11" dominant-baseline="middle">${emoji}</text>
+        </svg>`;
+        return L.divIcon({ html: svg, iconSize:[28,36], iconAnchor:[14,36], popupAnchor:[0,-36], className:'' });
+    }
+
+    // ── Accessibility tag helpers ─────────────────────────────────────
+    function chip(label, value, { type='neutral' } = {}) {
+        const cls = type === 'yes' ? 'chip-yes' : type === 'no' ? 'chip-no' : type === 'limit' ? 'chip-limit' : '';
+        return `<div class="a11y-chip">
+            <span class="chip-label">${label}</span>
+            <span class="chip-value ${cls}">${value}</span>
+        </div>`;
+    }
+
+    const WHEEL_LABEL = { yes:'✅ Tak', limited:'⚠️ Ograniczona', no:'❌ Nie' };
+    const WHEEL_TYPE  = { yes:'yes', limited:'limit', no:'no' };
+
+    const KERB_LABEL = { flush:'⬇️ Spłaszczona', lowered:'↘️ Obniżona', raised:'⬆️ Podwyższona', no:'❌ Brak' };
+    const SMOOTH_LABEL = {
+        excellent:'🟢 Doskonała', good:'🟢 Dobra', intermediate:'🟡 Średnia',
+        bad:'🔴 Zła', very_bad:'🔴 Bardzo zła', horrible:'🔴 Katastrofalna',
+    };
+
+    function yesNo(val) {
+        if (val === 'yes') return { label:'✅ Tak', type:'yes' };
+        if (val === 'no')  return { label:'❌ Nie', type:'no' };
+        return { label: val, type:'neutral' };
+    }
+
+    // ── Build drawer HTML ─────────────────────────────────────────────
+    function buildDrawer(props) {
+        const t = props.tags || {};
+        const name = t.name || t['name:pl'] || t['name:en'] || '(brak nazwy)';
+        const typeStr = t.amenity || t.tourism || t.shop || t.historic || t.public_transport || '';
+        const addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ');
+        const osmType = props.osm_type || 'node';
+        const osmId   = props.id;
+
+        // ── Accessibility chips ──
+        const chips = [];
+
+        // wheelchair
+        const wc = t.wheelchair || props.wheelchair;
+        if (wc && WHEEL_LABEL[wc]) {
+            chips.push(chip('Wózek inwalidzki', WHEEL_LABEL[wc], { type: WHEEL_TYPE[wc] }));
+        }
+
+        // toilets:wheelchair
+        if (t['toilets:wheelchair']) {
+            const yn = yesNo(t['toilets:wheelchair']);
+            chips.push(chip('Toaleta dostępna', yn.label, { type: yn.type }));
+        }
+
+        // kerb
+        if (t.kerb && KERB_LABEL[t.kerb]) {
+            chips.push(chip('Krawężnik', KERB_LABEL[t.kerb]));
+        }
+
+        // tactile_paving
+        if (t.tactile_paving) {
+            const yn = yesNo(t.tactile_paving);
+            chips.push(chip('Płytki dotykowe', yn.label, { type: yn.type }));
+        }
+
+        // ramp / ramp:wheelchair
+        const ramp = t['ramp:wheelchair'] || t.ramp;
+        if (ramp) {
+            const yn = yesNo(ramp);
+            chips.push(chip('Rampa', yn.label, { type: yn.type }));
+        }
+
+        // elevator
+        if (t.elevator) {
+            const yn = yesNo(t.elevator);
+            chips.push(chip('Winda', yn.label, { type: yn.type }));
+        }
+
+        // handrail
+        if (t.handrail) {
+            const yn = yesNo(t.handrail);
+            chips.push(chip('Poręcz', yn.label, { type: yn.type }));
+        }
+
+        // lit
+        if (t.lit) {
+            const yn = yesNo(t.lit);
+            chips.push(chip('Oświetlenie', yn.label, { type: yn.type }));
+        }
+
+        // hearing_loop / deaf
+        if (t.hearing_loop) {
+            const yn = yesNo(t.hearing_loop);
+            chips.push(chip('Pętla indukcyjna', yn.label, { type: yn.type }));
+        }
+        if (t['speech_output'] || t['departures_board:speech_output']) {
+            const val = t['departures_board:speech_output'] || t['speech_output'];
+            const yn = yesNo(val);
+            chips.push(chip('Ogłoszenia głosowe', yn.label, { type: yn.type }));
+        }
+
+        // surface
+        if (t.surface) {
+            chips.push(chip('Nawierzchnia', t.surface));
+        }
+
+        // smoothness
+        if (t.smoothness && SMOOTH_LABEL[t.smoothness]) {
+            chips.push(chip('Gładkość', SMOOTH_LABEL[t.smoothness]));
+        }
+
+        // incline
+        if (t.incline) {
+            chips.push(chip('Nachylenie', t.incline));
+        }
+
+        // width
+        if (t.width) {
+            chips.push(chip('Szerokość przejścia', t.width + ' m'));
+        }
+
+        // step_count
+        if (t.step_count) {
+            chips.push(chip('Liczba stopni', t.step_count));
+        }
+
+        // changing_table
+        if (t.changing_table) {
+            const yn = yesNo(t.changing_table);
+            chips.push(chip('Przewijak', yn.label, { type: yn.type }));
+        }
+
+        // fee
+        if (t.fee) {
+            const yn = yesNo(t.fee);
+            chips.push(chip('Odpłatne', yn.label, { type: yn.type }));
+        }
+
+        // Build HTML ──────────────────────────────────────────────────
+        let html = `
+            <p class="drawer-name">${escHtml(name)}</p>
+            ${typeStr ? `<p class="drawer-type">${escHtml(typeStr)}</p>` : ''}
+            ${addr    ? `<p class="drawer-address">📍 ${escHtml(addr)}</p>` : ''}
+            <hr class="drawer-divider">
+        `;
+
+        // Accessibility section
+        if (chips.length > 0 || t['wheelchair:description']) {
+            html += `<div class="dsection">
+                <p class="dsection-title">♿ Dostępność</p>`;
+            if (t['wheelchair:description']) {
+                html += `<div class="a11y-desc">${escHtml(t['wheelchair:description'])}</div>`;
+            }
+            if (chips.length) {
+                html += `<div class="a11y-grid" style="margin-top:${t['wheelchair:description'] ? '10px' : '0'}">${chips.join('')}</div>`;
+            }
+            html += `</div><hr class="drawer-divider">`;
+        }
+
+        // Info section
+        const infoRows = [];
+        if (t.opening_hours) infoRows.push(`<div class="info-row"><span class="info-icon">🕐</span><span>${escHtml(t.opening_hours)}</span></div>`);
+        if (t.phone)         infoRows.push(`<div class="info-row"><span class="info-icon">📞</span><span><a href="tel:${escHtml(t.phone)}">${escHtml(t.phone)}</a></span></div>`);
+        if (t.website)       infoRows.push(`<div class="info-row"><span class="info-icon">🌐</span><span><a href="${escHtml(t.website)}" target="_blank" rel="noopener">${escHtml(t.website)}</a></span></div>`);
+
+        if (infoRows.length) {
+            html += `<div class="dsection">
+                <p class="dsection-title">ℹ️ Informacje</p>
+                ${infoRows.join('')}
+            </div><hr class="drawer-divider">`;
+        }
+
+        // OSM link
+        if (osmId) {
+            html += `<p class="osm-link">
+                Źródło: <a href="https://www.openstreetmap.org/${osmType}/${osmId}" target="_blank" rel="noopener">OpenStreetMap #${osmId}</a>
+            </p>`;
+        }
+
+        return html;
+    }
+
+    function escHtml(str) {
+        return String(str)
+            .replace(/&/g,'&amp;')
+            .replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;')
+            .replace(/"/g,'&quot;');
+    }
+
+    // ── Drawer open / close ───────────────────────────────────────────
+    const drawer      = document.getElementById('drawer');
+    const drawerInner = document.getElementById('drawer-inner');
+    const drawerClose = document.getElementById('drawer-close');
+
+    function openDrawer(props) {
+        drawerInner.innerHTML = buildDrawer(props);
+        drawer.classList.add('open');
+        drawer.setAttribute('aria-hidden', 'false');
+        // On desktop, shrink map right edge so drawer doesn't overlap
+        const isMobile = window.innerWidth <= 700;
+        if (!isMobile) {
+            document.getElementById('map').style.right = 'var(--drawer-w)';
+            setTimeout(() => map.invalidateSize(), 340);
+        }
+    }
+
+    function closeDrawer() {
+        drawer.classList.remove('open');
+        drawer.setAttribute('aria-hidden', 'true');
+        const isMobile = window.innerWidth <= 700;
+        if (!isMobile) {
+            document.getElementById('map').style.right = '0';
+            setTimeout(() => map.invalidateSize(), 340);
+        }
+    }
+
+    drawerClose.addEventListener('click', closeDrawer);
+
+    // Close on Escape
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeDrawer();
+    });
+
+    // ── Markers ───────────────────────────────────────────────────────
+    let allMarkers   = [];
+    let markersLayer = L.layerGroup().addTo(map);
+
+    async function loadData() {
+        const resp = await fetch('/map/api/pois/');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        return resp.json();
+    }
+
+    function getActiveCategories() {
+        return new Set(
+            Array.from(document.querySelectorAll('.cat-filter'))
+                 .filter(cb => cb.checked)
+                 .map(cb => cb.value)
+        );
+    }
+
+    function renderMarkers() {
+        const active = getActiveCategories();
+        markersLayer.clearLayers();
+        for (const {marker, cat} of allMarkers) {
+            if (active.has(cat)) markersLayer.addLayer(marker);
+        }
+    }
+
+    (async () => {
+        try {
+            const geojson  = await loadData();
+            const features = geojson.features || [];
+
+            for (const feat of features) {
+                const props = feat.properties;
+                // Geometry may be Point, Polygon or Way — use props.lat/lon as reliable centroid
+                let lat, lon;
+                if (feat.geometry.type === 'Point') {
+                    [lon, lat] = feat.geometry.coordinates;
+                } else {
+                    // Fallback to centroid stored in properties by generate_static_data.py
+                    lat = props.lat;
+                    lon = props.lon;
+                }
+                if (!lat || !lon) continue;
+                const cat   = getCategory(props);
+
+                const marker = L.marker([lat, lon], { icon: makeIcon(cat) });
+
+                marker.on('click', () => openDrawer(props));
+
+                allMarkers.push({ marker, cat });
+            }
+
+            renderMarkers();
+            document.getElementById('poi-count').textContent =
+                `${features.length} dostępnych miejsc`;
+
+        } catch (e) {
+            const el = document.getElementById('poi-count');
+            el.textContent = 'Błąd: ' + e.message;
+            el.style.color = '#ff5555';
+        }
+    })();
+
+    // ── Checkbox listeners ────────────────────────────────────────────
+    document.querySelectorAll('.cat-filter').forEach(cb =>
+        cb.addEventListener('change', renderMarkers)
+    );
+
+    let allChecked = true;
+    document.getElementById('toggle-all').addEventListener('click', () => {
+        allChecked = !allChecked;
+        document.querySelectorAll('.cat-filter').forEach(cb => { cb.checked = allChecked; });
+        renderMarkers();
+    });
+
+    // ── Mobile: filter button & sidebar toggle ────────────────────────
+    const mobileFilterBtn = document.getElementById('mobile-filter-btn');
+    const sidebar         = document.getElementById('sidebar');
+
+    mobileFilterBtn.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+    });
+
+    // Close sidebar when clicking on map (mobile)
+    document.getElementById('map').addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+    });
+
+    </script>
+</body>
+</html>
