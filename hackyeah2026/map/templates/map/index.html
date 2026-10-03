@@ -350,8 +350,9 @@
                         onEachFeature: function (feature, layer) {
                             let popupContent = `<b>Kategoria nawierzchni:</b> ${cat}<br/>`;
                             popupContent += `<b>Nawierzchnia (OSM):</b> ${feature.properties.surface || 'brak'}<br/>`;
-                            if (feature.properties.grade !== undefined && feature.properties.grade !== null) {
-                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(feature.properties.grade) * 100).toFixed(1)}%<br/>`;
+                            const gradeVal = feature.properties.grade ?? feature.properties.grade_abs;
+                            if (gradeVal !== undefined && gradeVal !== null) {
+                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(gradeVal) * 100).toFixed(1)}%<br/>`;
                             }
                             if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;
                             layer.bindPopup(popupContent);
@@ -370,8 +371,9 @@
                         },
                         onEachFeature: function (feature, layer) {
                             let popupContent = `<b>Kategoria nachylenia:</b> ${cat}<br/>`;
-                            if (feature.properties.grade !== undefined && feature.properties.grade !== null) {
-                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(feature.properties.grade) * 100).toFixed(1)}%<br/>`;
+                            const gradeVal = feature.properties.grade ?? feature.properties.grade_abs;
+                            if (gradeVal !== undefined && gradeVal !== null) {
+                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(gradeVal) * 100).toFixed(1)}%<br/>`;
                             }
                             popupContent += `<b>Nawierzchnia:</b> ${feature.properties.surface || 'brak'}<br/>`;
                             if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;

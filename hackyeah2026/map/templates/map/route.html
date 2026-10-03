@@ -788,7 +788,8 @@
                         color = getSurfaceColor(props);
                         opacity = 0.55;
                     } else if (activeMode === 'grade') {
-                        color = getGradeColor(props.max_slope_pct);
+                        const slopeVal = props.max_slope_pct !== undefined ? props.max_slope_pct : (parseFloat(props.grade_abs ?? props.grade ?? 0) * 100);
+                        color = getGradeColor(slopeVal);
                         opacity = 0.6;
                         weight = 2.5;
                     }
