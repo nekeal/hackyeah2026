@@ -58,3 +58,14 @@ def test_route_view_status_code(client):
     url = reverse("map:route")
     response = client.get(url)
     assert response.status_code == 200
+
+
+@pytest.mark.django_db
+def test_geojson_endpoints_status_code(client):
+    roads_url = reverse("map:roads_geojson")
+    response = client.get(roads_url)
+    assert response.status_code in (200, 404)  # 200 if file exists, 404 if dataset not generated yet
+
+    geojson_url = reverse("map:geojson")
+    response = client.get(geojson_url)
+    assert response.status_code in (200, 404)

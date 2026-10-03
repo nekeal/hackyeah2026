@@ -693,7 +693,7 @@
         }
 
         function fetchRoadsNetwork() {
-            fetch('/map/api/geojson/')
+            fetch('{% url "map:roads_geojson" %}')
                 .then(res => res.json())
                 .then(data => {
                     roadsGeoJsonData = data;

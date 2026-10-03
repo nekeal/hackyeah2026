@@ -279,7 +279,7 @@
         async function loadRoadsData() {
             const loader = document.getElementById('loader');
             try {
-                const response = await fetch('/map/api/geojson/');
+                const response = await fetch('{% url "map:roads_geojson" %}');
                 if (!response.ok) throw new Error('Nie udało się pobrać danych GeoJSON.');
 
                 const data = await response.json();
@@ -317,7 +317,7 @@
 
                 // Pobranie dodatkowych barier (krawężniki, przejścia)
                 try {
-                    const detailsResp = await fetch('/map/api/details/');
+                    const detailsResp = await fetch('{% url "map:details_geojson" %}');
                     if (detailsResp.ok) {
                         const detailsData = await detailsResp.json();
                         for (const feat of detailsData.features) {
