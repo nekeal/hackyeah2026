@@ -1,0 +1,84 @@
+{
+  "template": "https://github.com/nekeal/cookiecutter-django-api",
+  "commit": "02e6c715ac7212e05fa78c2849f56137d483a487",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "project_name": "hackyeah2026",
+      "full_project_name": "HackYeah 2026",
+      "python_version": "3.14+",
+      "_python_version_specs": {
+        "3.14+": {
+          "versions": [
+            "3.14"
+          ]
+        },
+        "3.13+": {
+          "versions": [
+            "3.13",
+            "3.14"
+          ]
+        },
+        "3.8+": {
+          "versions": [
+            "3.8",
+            "3.9",
+            "3.10",
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.14"
+          ]
+        },
+        "3.9+": {
+          "versions": [
+            "3.9",
+            "3.10",
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.14"
+          ]
+        },
+        "3.10+": {
+          "versions": [
+            "3.10",
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.14"
+          ]
+        },
+        "3.11+": {
+          "versions": [
+            "3.11",
+            "3.12",
+            "3.13",
+            "3.14"
+          ]
+        },
+        "3.12+": {
+          "versions": [
+            "3.12",
+            "3.13",
+            "3.14"
+          ]
+        }
+      },
+      "github_username": "nekeal",
+      "github_repository_name": "hackyeah2026",
+      "email": "dev@hackyeah2026",
+      "description": "This is project developed as part of hackyeah 2026",
+      "use_jazzmin": "y",
+      "use_drf": "n",
+      "use_drf_yasg": "n",
+      "use_django_filters": "n",
+      "use_django_debug_toolbar": "n",
+      "use_tox": "n",
+      "use_celery": "n",
+      "use_dbbackup": "y",
+      "_template": "https://github.com/nekeal/cookiecutter-django-api"
+    }
+  },
+  "directory": null
+}
