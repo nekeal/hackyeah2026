@@ -12,6 +12,9 @@ dependencies = [
     "psycopg2-binary",
     "ipython",
     "environs",
+    "networkx",
+    "numpy",
+    "osmnx",
     "pyyaml",
     "srtm-py>=0.3.7",
 ]

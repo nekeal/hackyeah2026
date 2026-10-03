@@ -36,6 +36,7 @@ def get_routing_graph() -> tuple[nx.MultiDiGraph, list[Any], np.ndarray]:
             "grade": float,
             "grade_abs": float,
             "length": float,
+            "oneway": str,
         },
     )
 
