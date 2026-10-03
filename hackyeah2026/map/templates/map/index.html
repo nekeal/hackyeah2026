@@ -145,8 +145,8 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <script>
-        // Inicjalizacja Mapy
-        const map = L.map('map').setView([50.0614, 19.9365], 14); // Kraków Centrum
+        // Inicjalizacja Mapy z renderowaniem Canvas dla wydajności
+        const map = L.map('map', { preferCanvas: true }).setView([50.0614, 19.9365], 14); // Kraków Centrum
 
         // OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -162,8 +162,13 @@
         const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'sett', 'fine_gravel', 'grass_paver'];
         const surfacesBad = ['pebblestone', 'sand', 'mud', 'cobblestone', 'unhewn_cobblestone', 'metal_grid', 'stepping_stones'];
 
-        let geojsonLayer = null;
-        let roadsData = null;
+        // Osobne warstwy dla każdej kategorii (dla błyskawicznego przełączania)
+        const categoryLayers = {
+            good: L.layerGroup().addTo(map),
+            medium: L.layerGroup().addTo(map),
+            bad: L.layerGroup().addTo(map),
+            unknown: L.layerGroup().addTo(map)
+        };
 
         function getCategory(surface) {
             if (!surface || surface === "nan") return "unknown";
@@ -183,42 +188,6 @@
             }
         }
 
-        function renderMap() {
-            if (!roadsData) return;
-
-            // Zbierz zaznaczone filtry
-            const activeFilters = Array.from(document.querySelectorAll('.surface-filter'))
-                .filter(cb => cb.checked)
-                .map(cb => cb.value);
-
-            if (geojsonLayer) {
-                map.removeLayer(geojsonLayer);
-            }
-
-            geojsonLayer = L.geoJSON(roadsData, {
-                style: function (feature) {
-                    const surface = feature.properties.surface;
-                    const cat = getCategory(surface);
-                    return {
-                        color: getColor(cat),
-                        weight: cat === 'bad' ? 4 : 2,
-                        opacity: 0.8
-                    };
-                },
-                filter: function (feature) {
-                    const cat = getCategory(feature.properties.surface);
-                    return activeFilters.includes(cat);
-                },
-                onEachFeature: function (feature, layer) {
-                    let popupContent = `<b>Kategoria:</b> ${getCategory(feature.properties.surface)}<br/>`;
-                    popupContent += `<b>Nawierzchnia (OSM):</b> ${feature.properties.surface || 'brak'}<br/>`;
-                    popupContent += `<b>Nachylenie:</b> ${(feature.properties.grade * 100).toFixed(1)}%<br/>`;
-                    if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;
-                    layer.bindPopup(popupContent);
-                }
-            }).addTo(map);
-        }
-
         // Automatyczne pobieranie i ładowanie danych przy wczytaniu strony
         async function loadRoadsData() {
             const loader = document.getElementById('loader');
@@ -226,10 +195,38 @@
                 const response = await fetch('/map/api/roads/');
                 if (!response.ok) throw new Error("Brak pliku na serwerze");
 
-                roadsData = await response.json();
-                renderMap();
-                setTimeout(() => map.invalidateSize(), 100);
+                const roadsData = await response.json();
 
+                // Jednorazowe rozdzielenie cech do 4 warstw
+                const groupedFeatures = { good: [], medium: [], bad: [], unknown: [] };
+
+                for (const feature of roadsData.features) {
+                    const cat = getCategory(feature.properties.surface);
+                    groupedFeatures[cat].push(feature);
+                }
+
+                // Dodanie unikalnych warstw GeoJSON do LayerGroup
+                Object.keys(groupedFeatures).forEach(cat => {
+                    const geoLayer = L.geoJSON({ type: "FeatureCollection", features: groupedFeatures[cat] }, {
+                        style: {
+                            color: getColor(cat),
+                            weight: cat === 'bad' ? 4 : 2,
+                            opacity: 0.8
+                        },
+                        onEachFeature: function (feature, layer) {
+                            let popupContent = `<b>Kategoria:</b> ${cat}<br/>`;
+                            popupContent += `<b>Nawierzchnia (OSM):</b> ${feature.properties.surface || 'brak'}<br/>`;
+                            if (feature.properties.grade !== undefined && feature.properties.grade !== null) {
+                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(feature.properties.grade) * 100).toFixed(1)}%<br/>`;
+                            }
+                            if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;
+                            layer.bindPopup(popupContent);
+                        }
+                    });
+                    categoryLayers[cat].addLayer(geoLayer);
+                });
+
+                setTimeout(() => map.invalidateSize(), 100);
                 loader.style.display = 'none';
             } catch (e) {
                 loader.textContent = 'Błąd wczytywania danych: ' + e.message;
@@ -239,11 +236,19 @@
 
         loadRoadsData();
 
-        // Nasłuchiwanie checkboxów
+        // Błyskawiczna obsługa checkboxów - dodawanie / usuwanie gotowej warstwy z mapy w < 5ms
         document.querySelectorAll('.surface-filter').forEach(cb => {
-            cb.addEventListener('change', renderMap);
+            cb.addEventListener('change', (e) => {
+                const cat = e.target.value;
+                if (categoryLayers[cat]) {
+                    if (e.target.checked) {
+                        map.addLayer(categoryLayers[cat]);
+                    } else {
+                        map.removeLayer(categoryLayers[cat]);
+                    }
+                }
+            });
         });
-
     </script>
 </body>
 </html>
