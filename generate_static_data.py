@@ -100,6 +100,8 @@ print("\nKROK 2: Pobieranie siatki ścieżek (walk) z LOKALNEGO pliku PBF (offli
 # Tworzymy nową instancję OSM, aby uniknąć błędów stanu po wcześniejszym filtrowaniu
 osm_network = OSM(pbf_filename)
 osm_network.bounding_box = krakow_bbox
+# Włączamy zachowywanie kluczowych tagów dla skrzyżowań i przejść, które są krytyczne dla wózków!
+osm_network.keep_node_info_tags = ["crossing", "kerb", "tactile_paving", "highway", "wheelchair"]
 nodes_gdf, edges_gdf = osm_network.get_network(network_type="walking", nodes=True)
 
 # Przekształcamy na graf NetworkX
