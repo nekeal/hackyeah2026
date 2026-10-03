@@ -6,7 +6,8 @@
 #     "requests",
 #     "networkx",
 #     "srtm.py",
-#     "pyarrow"
+#     "pyarrow",
+#     "lxml"
 # ]
 # ///
 
@@ -48,6 +49,13 @@ Co pobiera i co generuje ten skrypt?
       Siatka chodników i ścieżek (network="walk") wzbogacona o wysokość z SRTM,
       dzięki czemu każda krawędź ma atrybut `grade` (kąt nachylenia).
       Zastosowanie: Dijkstra wyznaczające trasy unikające stromych górek.
+      UWAGA dla backendu — osmnx traktuje `oneway` jako bool, a `accessibility_*`
+      jako nieznany typ, więc po wczytaniu podaj typy własnych atrybutów:
+          ox.load_graphml(
+              "city_network_3d.graphml",
+              edge_dtypes={"accessibility_cost": float, "accessibility_penalty": float},
+          )
+      i ważuj krawędzie po `accessibility_cost` albo `length`.
 
 4. WARSTWA DROGOWA 3D DLA FRONTENDU (WIZUALIZACJA)
    -> roads_3d.geojson
@@ -101,7 +109,7 @@ gpd.GeoDataFrame.__init__ = patched_init
 # =============================================================================
 
 # Ustaw na True, aby testować tylko mały wycinek (np. Rynek Główny) -> błyskawiczny feedback!
-FAST_MODE = True
+FAST_MODE = True # keep always true
 
 # Topologiczne upraszczenie siatki: 600k -> 214k węzłów, identyczna geometria
 # i identyczne odległości, ale 3x szybszy zapis i routing. Węzły pośrednie nie
@@ -388,6 +396,23 @@ def add_elevations(graph: nx.MultiDiGraph) -> None:
             alt = elevation_data.get_elevation(lat, lon)
             graph.nodes[node_id]["elevation"] = float(alt) if alt is not None else 0.0
         log(" Sukces! Dodano współrzędne Z (wysokość) do węzłów.")
+
+        # Wyboistość SRTM DEM 30m powoduje sztuczne skoki wysokości na płaskich ulicach miejskich.
+        # Wygładzanie laplasowskie węzłów (3 iteracje) eliminuje szumy punktowe.
+        log(" Wygładzanie laplasowskie wysokości węzłów (3 pasma)...")
+        for _ in range(3):
+            new_elevs = {}
+            for node in graph.nodes():
+                nbrs = list(graph.neighbors(node)) + list(graph.predecessors(node))
+                if nbrs:
+                    nbr_set = set(nbrs)
+                    avg_alt = sum(float(graph.nodes[n].get("elevation", 0.0) or 0.0) for n in nbr_set) / len(nbr_set)
+                    new_elevs[node] = 0.5 * float(graph.nodes[node].get("elevation", 0.0) or 0.0) + 0.5 * avg_alt
+                else:
+                    new_elevs[node] = float(graph.nodes[node].get("elevation", 0.0) or 0.0)
+            for node, alt in new_elevs.items():
+                graph.nodes[node]["elevation"] = alt
+        log(" Zakończono wygładzanie wysokości węzłów.")
     except Exception as e:
         log(f" Błąd SRTM: {e}. Graf nie będzie miał poprawnych wysokości.")
         for node_id in graph.nodes():
@@ -413,32 +438,123 @@ def add_grades(graph: nx.MultiDiGraph) -> None:
         highway = str(data.get("highway", "")).lower()
         incline = data.get("incline")
 
+        # 2. Dla schodów ustawiamy wysokie strome nachylenie (25%), by na mapie były zawsze CZERWONE
+        if highway == "steps":
+            data["grade"] = 0.25
+            data["grade_abs"] = 0.25
+            continue
+
         u_alt = float(graph.nodes[u].get("elevation", 0.0) or 0.0)
         v_alt = float(graph.nodes[v].get("elevation", 0.0) or 0.0)
         dz = abs(u_alt - v_alt)
 
-        # 2. Usuwanie szumów wysokościowych DEM ze zwykłych ścieżek/chodników
-        if highway != "steps" and not incline:
-            # Dla krótkich odcinków (< 20m) różnica wysokości < 1.5m to w 100% szum pomiarowy
-            if length < 20.0 and dz < 1.5:
-                data["grade"] = 0.0
-                data["grade_abs"] = 0.0
-                cleaned_spikes += 1
-            # Dla odcinków < 40m różnica < 2.0m na płaskim terenie to też szum
-            elif length < 40.0 and dz < 2.0:
-                data["grade"] = 0.0
-                data["grade_abs"] = 0.0
-                cleaned_spikes += 1
-            # Jeśli raw grade jest > 8% bez schodów/incline, limitujemy do realistycznego maks 4%
-            elif float(data.get("grade_abs", 0.0)) > 0.08:
-                clamped = min(dz / length, 0.04) if length > 0 else 0.0
-                data["grade"] = clamped if float(data.get("grade", 0)) >= 0 else -clamped
-                data["grade_abs"] = clamped
+        # 3. Usuwanie szumów wysokościowych DEM ze zwykłych ścieżek/chodników
+        raw_grade = abs(float(data.get("grade", 0.0) or 0.0))
+        data["grade_abs"] = raw_grade
+
+        if not incline:
+            if raw_grade > 0.05:
+                # Na płaskich terenach miejskich nachylenie >5% bez tagu incline/steps to w 100% szum SRTM
+                if length < 30.0:
+                    data["grade"] = 0.0
+                    data["grade_abs"] = 0.0
+                else:
+                    clamped = min(dz / length, 0.03) if length > 0 else 0.0
+                    is_pos = float(data.get("grade", 0.0) or 0.0) >= 0
+                    data["grade"] = clamped if is_pos else -clamped
+                    data["grade_abs"] = clamped
                 cleaned_spikes += 1
 
     if fixed:
         log(f" Wyzerowano {fixed} wartości grade/grade_abs typu NaN.")
     log(f" Wyczyszczono/wygładzono {cleaned_spikes} fałszywych kolców nachylenia z szumu DEM.")
+
+
+def is_missing(value: object) -> bool:
+    """Brak tagu w OSM pyrosm zapisuje jako NaN — w GraphML-y ląduje wtedy litera 'nan'."""
+    return value is None or (isinstance(value, float) and value != value)
+
+
+# Atrybuty w grafie, których NIGDY nie usuwamy, nawet jeśli są puste.
+PROTECTED_GRAPH_ATTRS = {
+    "geometry",
+    "x",
+    "y",
+    "elevation",
+    "length",
+    "grade",
+    "grade_abs",
+    "accessibility_penalty",
+    "accessibility_cost",
+    "osmid",
+    "highway",
+    "street_count",
+    "u",
+    "v",
+}
+
+# Metadane OSM, które tylko mnożą rozmiar pliku — proweniencja i tak jest
+# w data_provenance.json (data pozyskania) oraz w 'timestamp' (data edycji w OSM).
+DROP_GRAPH_ATTRS = {"tags", "version", "changeset", "visible"}
+
+
+def normalize_oneway_for_graphml(graph: nx.MultiDiGraph) -> None:
+    """OSM daje `oneway=yes`, a osmnx przy wczytywaniu GraphML oczekuje prawdziwego booleana.
+
+    Bez tego `ox.load_graphml` wywala się na `Invalid literal for boolean: 'yes'`.
+    Wartości nieprzekładalne ('reversible') usuwamy — kierunek i tak jest już
+    zakodowany w samym grafie (to_graph rozbija krawędzie na kierunkowe).
+    """
+    truthy = {"yes", "true", "1", "-1"}
+    falsy = {"no", "false", "0"}
+    dropped = 0
+    for _, _, _, data in graph.edges(keys=True, data=True):
+        if "oneway" not in data:
+            continue
+        value = data["oneway"]
+        if isinstance(value, bool):
+            continue
+        token = str(value).strip().lower()
+        if token in truthy:
+            data["oneway"] = True
+        elif token in falsy:
+            data["oneway"] = False
+        else:
+            del data["oneway"]
+            dropped += 1
+    if dropped:
+        log(f" Usunięto {dropped} krawędzi z niejednoznacznym tagiem oneway.")
+
+
+def prune_graph_for_saving(graph: nx.MultiDiGraph) -> None:
+    """Wyrzuca puste atrybuty (NaN) i zduplikowane metadane przed zapisem.
+
+    Bez tego krawędź pakuje ~44 atrybuty, z czego ~20 to `nan` za brakujący tag —
+    setki megabajytów śmieci i wielokrotnie dłuższy zapis.
+    """
+    normalize_oneway_for_graphml(graph)
+    removed = 0
+    for _, data in graph.nodes(data=True):
+        removable = [
+            key
+            for key, value in data.items()
+            if key not in PROTECTED_GRAPH_ATTRS and (key in DROP_GRAPH_ATTRS or is_missing(value))
+        ]
+        for key in removable:
+            del data[key]
+        removed += len(removable)
+
+    for _, _, _, data in graph.edges(keys=True, data=True):
+        removable = [
+            key
+            for key, value in data.items()
+            if key not in PROTECTED_GRAPH_ATTRS and (key in DROP_GRAPH_ATTRS or is_missing(value))
+        ]
+        for key in removable:
+            del data[key]
+        removed += len(removable)
+
+    log(f" Usunięto {removed} pustych/niepotrzebnych atrybutów przed zapisem grafu.")
 
 
 def as_int(value: object) -> int:
@@ -564,12 +680,9 @@ def clean_gdf(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
 # --- KROK 5: ZAPISYWANIE WYNIKÓW ---
 def save_graph(graph: nx.MultiDiGraph) -> None:
-    log("KROK 5: Zapisywanie grafu oraz GeoJSONów...")
-    ox.save_graphml(graph, filepath="city_network_3d.graphml")
-    log(" Zapisano 'city_network_3d.graphml'")
+    log("KROK 5: Zapisywanie GeoJSONów oraz grafu...")
 
-    # Osobny eksport krawędzi do GeoJSONa, żeby frontend/mapa łatwo mogła
-    # pokolorować strome chodniki na czerwono.
+    # 1. Eksport krawędzi do GeoJSONa dla Frontendu (błyskawiczny zapis w ~5s)
     _, gdf_edges = ox.graph_to_gdfs(graph)
     if "nodes" in gdf_edges.columns:
         gdf_edges = gdf_edges.drop(columns=["nodes"])
@@ -578,6 +691,11 @@ def save_graph(graph: nx.MultiDiGraph) -> None:
 
     gdf_edges.to_file("roads_3d.geojson", driver="GeoJSON")
     log(" Zapisano 'roads_3d.geojson' dla Frontendu")
+
+    # 2. Eksport pełnego grafu GraphML dla algorytmów nawigacyjnych backendu
+    prune_graph_for_saving(graph)
+    ox.save_graphml(graph, filepath="city_network_3d.graphml")
+    log(" Zapisano 'city_network_3d.graphml'")
 
 
 def write_provenance(source: Path, cropped: Path, bbox: list[float], graph: nx.MultiDiGraph) -> None:

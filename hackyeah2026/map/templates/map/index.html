@@ -8,6 +8,9 @@
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 
+    <!-- Font Awesome 6 Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
     <style>
         :root {
             --bg-dark: #1e1e2e;
@@ -108,11 +111,52 @@
             font-weight: bold;
         }
 
+        /* Stylizacja ikonek barier Font Awesome */
+        .marker-badge {
+            border-radius: 50%;
+            width: 28px;
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            border: 2px solid #ffffff;
+            box-shadow: 0 3px 8px rgba(0,0,0,0.6);
+            transition: transform 0.2s ease;
+        }
+        .marker-badge:hover {
+            transform: scale(1.15);
+        }
+        .marker-badge-steps {
+            background: linear-gradient(135deg, #ff5555, #e63946);
+            color: #ffffff;
+        }
+        .marker-badge-kerb {
+            background: linear-gradient(135deg, #ffb86c, #ff9f43);
+            color: #1e1e2e;
+        }
+
+
+        .nav-btn {
+            flex: 1; text-align: center; padding: 6px 8px;
+            background: #313244; color: #f8f8f2; text-decoration: none;
+            border-radius: 6px; font-size: 0.82rem; font-weight: 600;
+            border: 1px solid #44475a; transition: all 0.2s;
+            display: flex; align-items: center; justify-content: center; gap: 4px;
+        }
+        .nav-btn:hover { background: #44475a; color: #bd93f9; }
+        .nav-btn.active { background: #bd93f9; color: #1e1e2e; }
     </style>
 </head>
 <body>
 
     <div id="sidebar">
+        <nav style="display: flex; gap: 6px; margin-bottom: 8px;" aria-label="Nawigacja">
+            <a href="/map/" class="nav-btn active"><i class="fa-solid fa-map"></i> Mapa</a>
+            <a href="/map/pois/" class="nav-btn"><i class="fa-solid fa-location-dot"></i> POI</a>
+            <a href="/map/route/" class="nav-btn"><i class="fa-solid fa-route"></i> Trasa</a>
+        </nav>
+
         <h1>Kraków Bez Barier</h1>
         <p>Eksplorator tras pieszych wygenerowany w oparciu o dane OSM i DEM.</p>
 
@@ -173,6 +217,15 @@
             </label>
         </div>
 
+        <!-- Ikonki Przeszkód -->
+        <div class="filter-group">
+            <h3>Ikonki Przeszkód</h3>
+            <label>
+                <input type="checkbox" id="toggleObstacles" checked>
+                <span>Pokaż ikonki (<i class="fa-solid fa-stairs"></i> Schody, <i class="fa-solid fa-ban"></i> Krawężniki)</span>
+            </label>
+        </div>
+
         <div style="font-size: 0.8rem; color: #6272a4; margin-top: auto;">
             Wykorzystuje dane nawierzchni i nachylenia (SRTM DEM) z OSM.
         </div>
@@ -185,7 +238,7 @@
 
     <script>
         // Inicjalizacja Mapy z renderowaniem Canvas dla wydajności
-        const map = L.map('map', { preferCanvas: true }).setView([50.0614, 19.9365], 14); // Kraków Centrum
+        const map = L.map('map', { preferCanvas: true }).setView([50.0614, 19.9365], 16); // Kraków Centrum
 
         // OpenStreetMap tiles
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -216,18 +269,33 @@
             critical: L.layerGroup()
         };
 
+        // Warstwa z ikonkami przeszkód (schody, krawężniki)
+        const obstacleLayers = L.layerGroup().addTo(map);
+
         let currentVisMode = 'surface';
 
-        function getSurfaceCategory(surface) {
-            if (!surface || surface === "nan") return "unknown";
-            surface = surface.toLowerCase();
+        function getSurfaceCategory(props) {
+            if (!props) return "unknown";
+            const hw = String(props.highway || '').toLowerCase();
+            if (hw === 'steps') return 'bad';
+
+            const sm = String(props.smoothness || '').toLowerCase();
+            if (['bad', 'very_bad', 'horrible', 'very_horrible', 'impassable'].includes(sm)) return 'bad';
+
+            let surface = String(props.surface || '').toLowerCase();
+            if (!surface || surface === "nan" || surface === "none") return "unknown";
             if (surfacesGood.includes(surface)) return "good";
             if (surfacesMedium.includes(surface)) return "medium";
             if (surfacesBad.includes(surface)) return "bad";
             return "unknown";
         }
 
-        function getGradeCategory(gradeVal) {
+        function getGradeCategory(props) {
+            if (!props) return "flat";
+            const hw = String(props.highway || '').toLowerCase();
+            if (hw === 'steps') return 'critical';
+
+            const gradeVal = props.grade;
             if (gradeVal === undefined || gradeVal === null || isNaN(gradeVal)) return "flat";
             const absGrade = Math.abs(parseFloat(gradeVal));
             if (absGrade < 0.03) return "flat";
@@ -268,11 +336,54 @@
                 const groupedGrade = { flat: [], moderate: [], steep: [], critical: [] };
 
                 for (const feature of roadsData.features) {
-                    const sCat = getSurfaceCategory(feature.properties.surface);
+                    const props = feature.properties;
+                    const sCat = getSurfaceCategory(props);
                     groupedSurface[sCat].push(feature);
 
-                    const gCat = getGradeCategory(feature.properties.grade);
+                    const gCat = getGradeCategory(props);
                     groupedGrade[gCat].push(feature);
+
+                    // Jeśli krawędź to schody — generujemy ikonkę schodów w punkcie środkowym
+                    if (props.highway === 'steps' && feature.geometry && feature.geometry.coordinates) {
+                        const coords = feature.geometry.coordinates;
+                        const midIndex = Math.floor(coords.length / 2);
+                        const midPt = coords[midIndex];
+                        if (midPt && midPt.length >= 2) {
+                            const stepsIcon = L.divIcon({
+                                className: 'obstacle-div-icon',
+                                html: '<div class="marker-badge marker-badge-steps" title="Schody"><i class="fa-solid fa-stairs"></i></div>',
+                                iconSize: [28, 28],
+                                iconAnchor: [14, 14]
+                            });
+                            const marker = L.marker([midPt[1], midPt[0]], { icon: stepsIcon });
+                            marker.bindPopup(`<b><i class="fa-solid fa-stairs"></i> Bariera: Schody</b><br/>Liczba stopni: ${props.step_count || 'nieokreślona'}<br/>Poręcz: ${props.handrail || 'brak'}`);
+                            obstacleLayers.addLayer(marker);
+                        }
+                    }
+                }
+
+                // Pobranie dodatkowych barier (krawężniki, przejścia)
+                try {
+                    const detailsResp = await fetch('/map/api/details/');
+                    if (detailsResp.ok) {
+                        const detailsData = await detailsResp.json();
+                        for (const feat of detailsData.features) {
+                            if (feat.properties && feat.properties.kerb === 'raised' && feat.geometry && feat.geometry.coordinates) {
+                                const pt = feat.geometry.coordinates;
+                                const kerbIcon = L.divIcon({
+                                    className: 'obstacle-div-icon',
+                                    html: '<div class="marker-badge marker-badge-kerb" title="Wysoki krawężnik"><i class="fa-solid fa-ban"></i></div>',
+                                    iconSize: [24, 24],
+                                    iconAnchor: [12, 12]
+                                });
+                                const marker = L.marker([pt[1], pt[0]], { icon: kerbIcon });
+                                marker.bindPopup('<b><i class="fa-solid fa-ban"></i> Bariera: Wysoki krawężnik</b><br/>Przeszkoda dla małych kół wózka');
+                                obstacleLayers.addLayer(marker);
+                            }
+                        }
+                    }
+                } catch(err) {
+                    console.warn('Brak szczegółów barier:', err);
                 }
 
                 // Budowanie warstw nawierzchni
@@ -347,6 +458,15 @@
         }
 
         loadRoadsData();
+
+        // Przełącznik ikonek barier
+        document.getElementById('toggleObstacles').addEventListener('change', (e) => {
+            if (e.target.checked) {
+                map.addLayer(obstacleLayers);
+            } else {
+                map.removeLayer(obstacleLayers);
+            }
+        });
 
         // Obsługa przełączania trybu (Radio)
         document.querySelectorAll('input[name="visMode"]').forEach(radio => {
