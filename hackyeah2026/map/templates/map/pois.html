@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kraków Bez Barier – Dostępne POI</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
 
     <style>
         :root {
@@ -47,6 +48,18 @@
             z-index: 1100;
             overflow-y: auto;
             display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        #sidebar h1 {
+            font-size: 1.2rem;
+            margin: 0 0 2px;
+            color: var(--accent);
+            border-bottom: 2px solid var(--border);
+            padding-bottom: 8px;
+        }
+
         .nav-btn {
             flex: 1; text-align: center; padding: 6px 8px;
             background: #313244; color: #f8f8f2; text-decoration: none;
@@ -56,18 +69,6 @@
         }
         .nav-btn:hover { background: #44475a; color: #bd93f9; }
         .nav-btn.active { background: #bd93f9; color: #1e1e2e; }
-    </style>
-</head>
-<body>
-
-    <div id="sidebar">
-        <nav style="display: flex; gap: 6px; margin-bottom: 4px;" aria-label="Nawigacja">
-            <a href="/map/" class="nav-btn"><i class="fa-solid fa-map"></i> Mapa</a>
-            <a href="/map/pois/" class="nav-btn active"><i class="fa-solid fa-location-dot"></i> POI</a>
-            <a href="/map/route/" class="nav-btn"><i class="fa-solid fa-route"></i> Trasa</a>
-        </nav>
-
-        <h1>Kraków Bez Barier</h1>
 
         #poi-count { font-size: .8rem; color: var(--muted); margin-top: -6px; }
 
@@ -363,6 +364,12 @@
 
     <!-- ═══ FILTER SIDEBAR ═══════════════════════════════════════════ -->
     <div id="sidebar" role="navigation" aria-label="Filtry kategorii">
+        <nav style="display: flex; gap: 6px; margin-bottom: 4px;" aria-label="Nawigacja">
+            <a href="/map/" class="nav-btn"><i class="fa-solid fa-map"></i> Mapa</a>
+            <a href="/map/pois/" class="nav-btn active"><i class="fa-solid fa-location-dot"></i> POI</a>
+            <a href="/map/route/" class="nav-btn"><i class="fa-solid fa-route"></i> Trasa</a>
+        </nav>
+
         <h1>♿ Dostępne POI</h1>
         <p id="poi-count">Wczytywanie…</p>
 
@@ -498,10 +505,45 @@
         return { label: val, type:'neutral' };
     }
 
+    // ── POI Name Resolution ───────────────────────────────────────────
+    const CATEGORY_NAMES_PL = {
+        restaurant: 'Restauracja', cafe: 'Kawiarnia', fast_food: 'Fast food',
+        pub: 'Pub / Bar', bar: 'Bar', pharmacy: 'Apteka', toilets: 'Toaleta publiczna',
+        drinking_water: 'Poidełko z wodą', post_box: 'Skrzynka pocztowa', post_office: 'Poczta',
+        bank: 'Bank', atm: 'Bankomat', bench: 'Ławka', waste_basket: 'Kosz na śmieci',
+        museum: 'Muzeum', hotel: 'Hotel', attraction: 'Atrakcja turystyczna',
+        memorial: 'Pomnik / Miejsce pamięci', monument: 'Pomnik', statue: 'Rzeźba / Pomnik',
+        artwork: 'Dzieło sztuki', viewpoint: 'Punkt widokowy', information: 'Punkt informacyjny',
+        bus_stop: 'Przystanek autobusowy', tram_stop: 'Przystanek tramwajowy',
+        station: 'Stacja / Dworzec', platform: 'Peron / Przystanek', stop_position: 'Przystanek',
+        clothes: 'Sklep odzieżowy', supermarket: 'Supermarket', convenience: 'Sklep spożywczy',
+        bakery: 'Piekarnia', shop: 'Sklep',
+    };
+
+    function getPoiName(props) {
+        const t = props.tags || {};
+        let name = props.name || t.name || t['name:pl'] || t['name:en'] || t.official_name || t.alt_name;
+        if (name && name !== 'null' && name.trim()) return name.trim();
+
+        if (t.brand) return t.brand;
+        if (t.operator) return t.operator;
+        if (t.ref) return 'Przystanek ' + t.ref;
+
+        const subType = t.amenity || t.shop || t.tourism || t.historic || t.railway || t.highway || t.public_transport || props.highway;
+        if (subType && CATEGORY_NAMES_PL[subType]) {
+            return CATEGORY_NAMES_PL[subType];
+        }
+        if (subType) {
+            return String(subType).replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        }
+
+        return 'Dostępne miejsce';
+    }
+
     // ── Build drawer HTML ─────────────────────────────────────────────
     function buildDrawer(props) {
         const t = props.tags || {};
-        const name = t.name || t['name:pl'] || t['name:en'] || '(brak nazwy)';
+        const name = getPoiName(props);
         const typeStr = t.amenity || t.tourism || t.shop || t.historic || t.public_transport || '';
         const addr = [t['addr:street'], t['addr:housenumber']].filter(Boolean).join(' ');
         const osmType = props.osm_type || 'node';
@@ -738,7 +780,7 @@
                 const cat   = getCategory(props);
 
                 const marker = L.marker([lat, lon], { icon: makeIcon(cat) });
-
+                marker.bindTooltip(escHtml(getPoiName(props)), { direction: 'top', offset: [0, -32] });
                 marker.on('click', () => openDrawer(props));
 
                 allMarkers.push({ marker, cat });

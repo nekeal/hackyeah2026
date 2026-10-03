@@ -1,0 +1,1178 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kraków Bez Barier – Planer Trasy</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+
+    <style>
+        :root {
+            --bg-dark:   #1e1e2e;
+            --panel-bg:  #282a36;
+            --panel2:    #313244;
+            --text:      #f8f8f2;
+            --accent:    #bd93f9;
+            --green:     #50fa7b;
+            --yellow:    #f1fa8c;
+            --red:       #ff5555;
+            --blue:      #8be9fd;
+            --orange:    #ffb86c;
+            --muted:     #6272a4;
+            --border:    #44475a;
+            --sidebar-w: 360px;
+        }
+
+        *, *::before, *::after { box-sizing: border-box; }
+
+        body, html {
+            margin: 0; padding: 0;
+            height: 100%; overflow: hidden;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text);
+        }
+
+        /* Top Header Navigation */
+        #top-nav {
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            height: 50px;
+            background: rgba(30, 30, 46, 0.95);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--border);
+            z-index: 1200;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+        }
+
+        .brand {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--accent);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 10px;
+        }
+
+        .nav-link {
+            color: var(--text);
+            text-decoration: none;
+            padding: 6px 14px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .nav-link:hover {
+            background: var(--panel2);
+            color: var(--accent);
+        }
+
+        .nav-link.active {
+            background: var(--accent);
+            color: #1e1e2e;
+        }
+
+        /* Sidebar Container */
+        #sidebar {
+            position: fixed;
+            top: 50px; left: 0;
+            width: var(--sidebar-w);
+            height: calc(100vh - 50px);
+            background: var(--panel-bg);
+            padding: 18px 14px;
+            box-shadow: 3px 0 12px rgba(0,0,0,.6);
+            z-index: 1100;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        /* Map Container */
+        #map {
+            position: absolute;
+            top: 50px;
+            left: var(--sidebar-w);
+            right: 0;
+            bottom: 0;
+        }
+
+        .section-title {
+            font-size: 0.95rem;
+            font-weight: 700;
+            color: var(--accent);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin: 0 0 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .form-card {
+            background: var(--panel2);
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .input-group label {
+            font-size: 0.82rem;
+            color: var(--muted);
+            font-weight: 600;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 6px;
+        }
+
+        .input-row input {
+            flex: 1;
+            background: #181825;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            color: var(--text);
+            padding: 8px 10px;
+            font-size: 0.88rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .input-row input:focus-visible {
+            border-color: var(--accent);
+            box-shadow: 0 0 0 2px rgba(189, 147, 249, 0.3);
+        }
+
+        .btn-icon {
+            background: var(--border);
+            border: none;
+            color: var(--text);
+            border-radius: 6px;
+            padding: 0 10px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-icon:hover, .btn-icon:focus-visible {
+            background: var(--accent);
+            color: #1e1e2e;
+            outline: none;
+        }
+
+        .btn-swap {
+            align-self: center;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--accent);
+            border-radius: 50%;
+            width: 32px;
+            height: 32px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-swap:hover {
+            background: var(--accent);
+            color: #1e1e2e;
+            transform: rotate(180deg);
+        }
+
+        /* Filter controls */
+        .filter-card {
+            background: var(--panel2);
+            border-radius: 10px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .slider-box {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .slider-header {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+        }
+
+        .slider-header span.val {
+            color: var(--orange);
+            font-weight: 700;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.86rem;
+            cursor: pointer;
+            user-select: none;
+            padding: 3px 0;
+        }
+
+        .checkbox-label input {
+            accent-color: var(--accent);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        /* Action Buttons */
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent), #a777e3);
+            color: #1e1e2e;
+            border: none;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 0.98rem;
+            cursor: pointer;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 12px rgba(189, 147, 249, 0.3);
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary:hover, .btn-primary:focus-visible {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 16px rgba(189, 147, 249, 0.5);
+            outline: none;
+        }
+
+        /* Summary Card */
+        .summary-card {
+            background: var(--panel2);
+            border-radius: 10px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-align: center;
+            display: inline-block;
+        }
+        .status-accessible { background: rgba(80, 250, 123, 0.15); color: var(--green); border: 1px solid var(--green); }
+        .status-moderate   { background: rgba(241, 250, 140, 0.15); color: var(--yellow); border: 1px solid var(--yellow); }
+        .status-difficult  { background: rgba(255, 85, 85, 0.15); color: var(--red); border: 1px solid var(--red); }
+
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .metric-box {
+            background: #181825;
+            padding: 8px 10px;
+            border-radius: 6px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .metric-box .label { font-size: 0.75rem; color: var(--muted); }
+        .metric-box .value { font-size: 1.05rem; font-weight: 700; color: var(--text); }
+
+        .barrier-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .chip {
+            font-size: 0.78rem;
+            padding: 4px 8px;
+            border-radius: 4px;
+            background: #181825;
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* Navigation Steps */
+        .instructions-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 350px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+
+        .step-item {
+            background: var(--panel2);
+            border-left: 4px solid var(--accent);
+            border-radius: 0 8px 8px 0;
+            padding: 10px 12px;
+            font-size: 0.86rem;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+
+        .step-item:hover, .step-item:focus-visible {
+            background: #3e405a;
+            outline: none;
+        }
+
+        .step-item.has-warning {
+            border-left-color: var(--orange);
+        }
+
+        .step-header {
+            display: flex;
+            justify-content: space-between;
+            font-weight: 700;
+        }
+
+        .step-meta {
+            display: flex;
+            gap: 8px;
+            font-size: 0.78rem;
+            color: var(--muted);
+        }
+
+        .step-warning {
+            color: var(--orange);
+            font-size: 0.8rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+            margin-top: 2px;
+        }
+
+        .btn-exclude-small {
+            background: rgba(255, 85, 85, 0.2);
+            color: var(--red);
+            border: 1px solid var(--red);
+            border-radius: 4px;
+            padding: 2px 6px;
+            font-size: 0.72rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn-exclude-small:hover {
+            background: var(--red);
+            color: #ffffff;
+        }
+
+        /* Provenance card */
+        .provenance-card {
+            background: #181825;
+            border-radius: 6px;
+            padding: 8px 10px;
+            font-size: 0.75rem;
+            color: var(--muted);
+            border: 1px dashed var(--border);
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .provenance-card strong { color: var(--text); }
+
+        .loader-spinner {
+            display: none;
+            text-align: center;
+            padding: 12px;
+            background: rgba(0,0,0,0.5);
+            border-radius: 8px;
+            color: var(--green);
+            font-weight: 700;
+            font-size: 0.9rem;
+        }
+
+        /* Marker styles */
+        .leaflet-div-icon {
+            background: transparent;
+            border: none;
+        }
+
+        .pin-marker {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+            border: 2px solid white;
+        }
+        .pin-start { background: linear-gradient(135deg, #50fa7b, #2ecc71); color: #1e1e2e; }
+        .pin-end   { background: linear-gradient(135deg, #ff5555, #e74c3c); }
+
+        /* Selected step highlight in sidebar */
+        .step-item.selected-step {
+            border-left: 6px solid var(--orange) !important;
+            background: #3e405a !important;
+            box-shadow: 0 0 14px rgba(255, 184, 108, 0.4);
+            transform: translateX(4px);
+            transition: all 0.2s ease;
+        }
+
+        /* Pulsing barrier highlight marker on map */
+        @keyframes pulse-ring {
+            0% { transform: scale(0.6); opacity: 0.9; }
+            100% { transform: scale(2.2); opacity: 0; }
+        }
+
+        .pulse-marker-box {
+            position: relative;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .pulse-ring {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 184, 108, 0.5);
+            border: 2px solid var(--orange);
+            animation: pulse-ring 1.5s infinite ease-out;
+        }
+
+        .pulse-badge {
+            position: relative;
+            z-index: 2;
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #ffb86c, #ff5555);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.6);
+            border: 2px solid white;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Top Navigation Header -->
+    <nav id="top-nav" aria-label="Główna nawigacja">
+        <a href="/map/" class="brand">
+            <i class="fa-solid fa-wheelchair-move"></i> Kraków Bez Barier
+        </a>
+        <div class="nav-links">
+            <a href="/map/" class="nav-link"><i class="fa-solid fa-map"></i> Mapa Główna</a>
+            <a href="/map/pois/" class="nav-link"><i class="fa-solid fa-location-dot"></i> Dostępne POI</a>
+            <a href="/map/route/" class="nav-link active" aria-current="page"><i class="fa-solid fa-route"></i> Planer Trasy</a>
+        </div>
+    </nav>
+
+    <!-- Sidebar with Route Form & Settings -->
+    <div id="sidebar" role="region" aria-label="Panel wyznaczania trasy">
+        
+        <div class="section-title">
+            <i class="fa-solid fa-location-crosshairs"></i> Punkty Nawigacji
+        </div>
+
+        <div class="form-card">
+            <div class="input-group">
+                <label for="inputStart">Punkt A (Start)</label>
+                <div class="input-row">
+                    <input type="text" id="inputStart" placeholder="Kliknij na mapie lub podaj lat,lon" value="50.0617, 19.9373">
+                    <button class="btn-icon" id="btnSetStartMap" title="Kliknij na mapie, aby ustawić Punkt A">
+                        <i class="fa-solid fa-map-pin"></i>
+                    </button>
+                </div>
+            </div>
+
+            <button class="btn-swap" id="btnSwapPoints" title="Zamień Punkt A i B miejscami" aria-label="Zamień punkt A i B">
+                <i class="fa-solid fa-arrow-down-up-lock"></i>
+            </button>
+
+            <div class="input-group">
+                <label for="inputEnd">Punkt B (Cel)</label>
+                <div class="input-row">
+                    <input type="text" id="inputEnd" placeholder="Kliknij na mapie lub podaj lat,lon" value="50.0570, 19.9350">
+                    <button class="btn-icon" id="btnSetEndMap" title="Kliknij na mapie, aby ustawić Punkt B">
+                        <i class="fa-solid fa-map-pin"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="section-title">
+            <i class="fa-solid fa-sliders"></i> Preferencje Dostępności
+        </div>
+
+        <div class="filter-card">
+            <div class="slider-box">
+                <div class="slider-header">
+                    <span>Maksymalne nachylenie</span>
+                    <span class="val" id="maxSlopeVal">6%</span>
+                </div>
+                <input type="range" id="maxSlopeSlider" min="3" max="15" value="6" step="1" aria-label="Maksymalne dopuszczalne nachylenie">
+            </div>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkStairs">
+                <span>Zezwól na schody (🪜)</span>
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkRamps" checked>
+                <span>Preferuj rampy i podjazdy (📐)</span>
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkElevators" checked>
+                <span>Korzystaj z wind (🛗)</span>
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkAvoidCobble" checked>
+                <span>Unikaj kostki brukowej / żwiru (🪨)</span>
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkSmoothCrossing" checked>
+                <span>Obniżone krawężniki (♿)</span>
+            </label>
+
+            <label class="checkbox-label">
+                <input type="checkbox" id="chkAvoidNarrow">
+                <span>Unikaj wąskich przejść &lt;90cm (📏)</span>
+            </label>
+        </div>
+
+        <div class="section-title">
+            <i class="fa-solid fa-layer-group"></i> Widok Nawierzchni Ulic w Tle
+        </div>
+
+        <div class="filter-card">
+            <label class="checkbox-label">
+                <input type="radio" name="bgLayerMode" value="surface" checked>
+                <span>Kolory nawierzchni (Asfalt / Bruk / Żwir)</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="radio" name="bgLayerMode" value="grade">
+                <span>Kolory nachylenia (Płasko / Stromo)</span>
+            </label>
+            <label class="checkbox-label">
+                <input type="radio" name="bgLayerMode" value="plain">
+                <span>Jednolity kolor siatki</span>
+            </label>
+
+            <div id="surfaceLegend" style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: 0.78rem; padding-top: 6px; border-top: 1px solid var(--border);">
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 12px; height: 12px; background: #50fa7b; border-radius: 3px; display: inline-block;"></span>
+                    <span>Gładka / Asfalt / Beton</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 12px; height: 12px; background: #f1fa8c; border-radius: 3px; display: inline-block;"></span>
+                    <span>Wyboista / Utwardzona / Żwir</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 12px; height: 12px; background: #ff5555; border-radius: 3px; display: inline-block;"></span>
+                    <span>Bruk / Kocie łby / Schody</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px;">
+                    <span style="width: 12px; height: 12px; background: #8be9fd; border-radius: 3px; display: inline-block;"></span>
+                    <span>Nieznana nawierzchnia</span>
+                </div>
+            </div>
+        </div>
+
+        <button id="btnCalculateRoute" class="btn-primary">
+            <i class="fa-solid fa-route"></i> Wyznacz Dostępną Trasę
+        </button>
+
+        <div id="loader" class="loader-spinner">
+            <i class="fa-solid fa-spinner fa-spin"></i> Obliczanie optymalnej trasy 3D...
+        </div>
+
+        <!-- Summary Container -->
+        <div id="summaryContainer" style="display: none;">
+            <div class="section-title">
+                <i class="fa-solid fa-chart-pie"></i> Podsumowanie Trasy
+            </div>
+
+            <div class="summary-card">
+                <div id="statusBadge" class="status-badge status-accessible">Pełna Dostępność</div>
+
+                <div class="metrics-grid">
+                    <div class="metric-box">
+                        <span class="label">Dystans</span>
+                        <span class="value" id="valDistance">0 m</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="label">Czas (wózek)</span>
+                        <span class="value" id="valDuration">0 min</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="label">Max Nachylenie</span>
+                        <span class="value" id="valMaxSlope">0%</span>
+                    </div>
+                    <div class="metric-box">
+                        <span class="label">Wzniesienia</span>
+                        <span class="value" id="valElevGain">0 m</span>
+                    </div>
+                </div>
+
+                <div class="barrier-chips" id="barrierChips">
+                    <!-- Dynamic barrier counter chips -->
+                </div>
+
+                <div class="provenance-card" id="provenanceCard">
+                    <!-- Provenance details -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Instructions Container -->
+        <div id="instructionsWrapper" style="display: none;">
+            <div class="section-title">
+                <i class="fa-solid fa-list-check"></i> Wskazówki Trasy (<span id="stepsCount">0</span>)
+            </div>
+            <div id="instructionsList" class="instructions-list">
+                <!-- Dynamic step items -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Map Element -->
+    <div id="map" role="region" aria-label="Mapa z wyznaczoną trasą"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // State management
+        let map;
+        let startMarker = null;
+        let endMarker = null;
+        let routePolyline = null;
+        let activePointSelect = null; // 'start' or 'end'
+        let excludedEdgeIds = [];
+        let roadsLayer = null;
+        let roadsGeoJsonData = null;
+
+        // Surface classification constants
+        const surfacesGood = ['asphalt', 'paving_stones', 'paved', 'concrete', 'compacted', 'concrete:plates'];
+        const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'sett', 'fine_gravel', 'grass_paver'];
+        const surfacesBad = ['pebblestone', 'sand', 'mud', 'cobblestone', 'unhewn_cobblestone', 'metal_grid', 'stepping_stones'];
+
+        function getSurfaceCategory(props) {
+            if (!props) return "unknown";
+            const hw = String(props.highway || '').toLowerCase();
+            if (hw === 'steps') return 'bad';
+
+            const sm = String(props.smoothness || '').toLowerCase();
+            if (['bad', 'very_bad', 'horrible', 'very_horrible', 'impassable'].includes(sm)) return 'bad';
+
+            let surface = String(props.surface || '').toLowerCase();
+            if (!surface || surface === "nan" || surface === "none") return "unknown";
+            if (surfacesGood.includes(surface)) return "good";
+            if (surfacesMedium.includes(surface)) return "medium";
+            if (surfacesBad.includes(surface)) return "bad";
+            return "unknown";
+        }
+
+        function getSurfaceColor(props) {
+            const cat = getSurfaceCategory(props);
+            switch(cat) {
+                case 'good': return '#50fa7b';
+                case 'medium': return '#f1fa8c';
+                case 'bad': return '#ff5555';
+                case 'unknown': return '#8be9fd';
+                default: return '#6272a4';
+            }
+        }
+
+        function getGradeColor(props) {
+            if (!props) return '#50fa7b';
+            const hw = String(props.highway || '').toLowerCase();
+            if (hw === 'steps') return '#ff5555';
+            const g = Math.abs(parseFloat(props.grade || 0));
+            if (g < 0.03) return '#50fa7b';
+            if (g < 0.06) return '#f1fa8c';
+            if (g < 0.10) return '#ffb86c';
+            return '#ff5555';
+        }
+
+        function updateRoadsStyle() {
+            if (!roadsLayer) return;
+
+            const mode = document.querySelector('input[name="bgLayerMode"]:checked')?.value || 'surface';
+            const legendBox = document.getElementById('surfaceLegend');
+            if (legendBox) legendBox.style.display = (mode === 'surface') ? 'flex' : 'none';
+
+            roadsLayer.setStyle((feature) => {
+                const props = feature.properties || {};
+                if (mode === 'surface') {
+                    return { color: getSurfaceColor(props), weight: 3, opacity: 0.7 };
+                } else if (mode === 'grade') {
+                    return { color: getGradeColor(props), weight: 3, opacity: 0.7 };
+                } else {
+                    return { color: '#6272a4', weight: 2, opacity: 0.35 };
+                }
+            });
+        }
+
+        // DOM Elements
+        const inputStart = document.getElementById('inputStart');
+        const inputEnd = document.getElementById('inputEnd');
+        const maxSlopeSlider = document.getElementById('maxSlopeSlider');
+        const maxSlopeVal = document.getElementById('maxSlopeVal');
+
+        // Init Leaflet Map
+        function initMap() {
+            map = L.map('map', {
+                preferCanvas: true,
+                zoomControl: true,
+                attributionControl: true
+            }).setView([50.0617, 19.9373], 15); // Kraków Rynek Główny
+
+            // Standard OpenStreetMap tiles (consistent with index.html & pois.html)
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+                maxZoom: 20
+            }).addTo(map);
+
+            // Load background roads network with dynamic surface/grade coloring
+            fetch('/map/api/roads/')
+                .then(res => res.json())
+                .then(data => {
+                    roadsGeoJsonData = data;
+                    roadsLayer = L.geoJSON(data, {
+                        style: (feature) => ({
+                            color: getSurfaceColor(feature.properties),
+                            weight: 3,
+                            opacity: 0.7
+                        })
+                    }).addTo(map);
+                    updateRoadsStyle();
+                })
+                .catch(err => console.log('Brak podglądu dróg w tle:', err));
+
+            document.querySelectorAll('input[name="bgLayerMode"]').forEach(radio => {
+                radio.addEventListener('change', updateRoadsStyle);
+            });
+
+            // Map click listener for setting A/B points
+            map.on('click', function(e) {
+                const lat = parseFloat(e.latlng.lat.toFixed(6));
+                const lon = parseFloat(e.latlng.lng.toFixed(6));
+
+                if (activePointSelect === 'start' || (!activePointSelect && (!startMarker || (startMarker && endMarker)))) {
+                    setStartPoint(lat, lon);
+                    activePointSelect = 'end';
+                } else {
+                    setEndPoint(lat, lon);
+                    activePointSelect = null;
+                }
+            });
+
+            // Set initial points
+            setStartPoint(50.0617, 19.9373);
+            setEndPoint(50.0570, 19.9350);
+        }
+
+        function createPinIcon(type, letter) {
+            const cssClass = type === 'start' ? 'pin-marker pin-start' : 'pin-marker pin-end';
+            return L.divIcon({
+                className: 'leaflet-div-icon',
+                html: `<div class="${cssClass}">${letter}</div>`,
+                iconSize: [32, 32],
+                iconAnchor: [16, 16]
+            });
+        }
+
+        function setStartPoint(lat, lon) {
+            inputStart.value = `${lat}, ${lon}`;
+            if (startMarker) map.removeLayer(startMarker);
+            startMarker = L.marker([lat, lon], {
+                icon: createPinIcon('start', 'A'),
+                draggable: true
+            }).addTo(map);
+
+            startMarker.bindPopup("<b>Punkt A (Start)</b>").openPopup();
+
+            startMarker.on('dragend', function(e) {
+                const p = e.target.getLatLng();
+                inputStart.value = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+            });
+        }
+
+        function setEndPoint(lat, lon) {
+            inputEnd.value = `${lat}, ${lon}`;
+            if (endMarker) map.removeLayer(endMarker);
+            endMarker = L.marker([lat, lon], {
+                icon: createPinIcon('end', 'B'),
+                draggable: true
+            }).addTo(map);
+
+            endMarker.bindPopup("<b>Punkt B (Cel)</b>").openPopup();
+
+            endMarker.on('dragend', function(e) {
+                const p = e.target.getLatLng();
+                inputEnd.value = `${p.lat.toFixed(6)}, ${p.lng.toFixed(6)}`;
+            });
+        }
+
+        // Live slider value update
+        maxSlopeSlider.addEventListener('input', (e) => {
+            maxSlopeVal.textContent = `${e.target.value}%`;
+        });
+
+        // Swap button
+        document.getElementById('btnSwapPoints').addEventListener('click', () => {
+            const tempVal = inputStart.value;
+            inputStart.value = inputEnd.value;
+            inputEnd.value = tempVal;
+
+            if (startMarker && endMarker) {
+                const pStart = startMarker.getLatLng();
+                const pEnd = endMarker.getLatLng();
+                setStartPoint(pEnd.lat, pEnd.lng);
+                setEndPoint(pStart.lat, pStart.lng);
+            }
+        });
+
+        document.getElementById('btnSetStartMap').addEventListener('click', () => {
+            activePointSelect = 'start';
+            alert('Kliknij w dowolnym miejscu na mapie, aby wskazać Punkt A (Start).');
+        });
+
+        document.getElementById('btnSetEndMap').addEventListener('click', () => {
+            activePointSelect = 'end';
+            alert('Kliknij w dowolnym miejscu na mapie, aby wskazać Punkt B (Cel).');
+        });
+
+        // Main Route Fetch Function
+        async function fetchRoute() {
+            const parseCoords = (val) => {
+                const parts = val.split(',').map(s => parseFloat(s.trim()));
+                if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                    return [parts[0], parts[1]];
+                }
+                return null;
+            };
+
+            const start = parseCoords(inputStart.value);
+            const end = parseCoords(inputEnd.value);
+
+            if (!start || !end) {
+                alert('Podaj poprawne współrzędne Punktu A i B.');
+                return;
+            }
+
+            const loader = document.getElementById('loader');
+            loader.style.display = 'block';
+
+            const payload = {
+                start: { lat: start[0], lon: start[1] },
+                end: { lat: end[0], lon: end[1] },
+                preferences: {
+                    max_slope: parseFloat(maxSlopeSlider.value),
+                    allow_stairs: document.getElementById('chkStairs').checked,
+                    allow_ramps: document.getElementById('chkRamps').checked,
+                    allow_elevators: document.getElementById('chkElevators').checked,
+                    avoid_cobblestone: document.getElementById('chkAvoidCobble').checked,
+                    smooth_crossing: document.getElementById('chkSmoothCrossing').checked,
+                    avoid_narrow: document.getElementById('chkAvoidNarrow').checked
+                },
+                excluded_edge_ids: excludedEdgeIds
+            };
+
+            try {
+                const response = await fetch('/map/api/route/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+                loader.style.display = 'none';
+
+                if (!response.ok || data.error) {
+                    alert(`Błąd: ${data.error || 'Nie udało się wyznaczyć trasy.'}`);
+                    return;
+                }
+
+                renderRouteOnMap(data);
+                renderSummary(data.summary, data.provenance);
+                renderInstructions(data.instructions);
+
+            } catch (err) {
+                loader.style.display = 'none';
+                alert(`Błąd połączenia z serwerem: ${err}`);
+            }
+        }
+
+        function renderRouteOnMap(data) {
+            if (routePolyline) map.removeLayer(routePolyline);
+
+            const feature = data.geojson || data;
+            const latlngs = feature.geometry.coordinates.map(c => [c[1], c[0]]);
+
+            // Polyline styling based on accessibility status
+            let color = '#50fa7b'; // green default
+            if (data.summary.status_code === 'moderate') color = '#f1fa8c';
+            if (data.summary.status_code === 'difficult') color = '#ff5555';
+
+            routePolyline = L.polyline(latlngs, {
+                color: color,
+                weight: 6,
+                opacity: 0.9,
+                lineCap: 'round'
+            }).addTo(map);
+
+            map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+        }
+
+        function renderSummary(summary, provenance) {
+            document.getElementById('summaryContainer').style.display = 'block';
+
+            const badge = document.getElementById('statusBadge');
+            badge.textContent = summary.accessibility_status;
+            badge.className = `status-badge status-${summary.status_code}`;
+
+            document.getElementById('valDistance').textContent = summary.total_distance_m < 1000 
+                ? `${Math.round(summary.total_distance_m)} m` 
+                : `${(summary.total_distance_m / 1000).toFixed(2)} km`;
+            
+            document.getElementById('valDuration').textContent = `${summary.estimated_duration_min} min`;
+            document.getElementById('valMaxSlope').textContent = `${summary.max_slope_percent}%`;
+            document.getElementById('valElevGain').textContent = `${summary.elevation_gain_m} m`;
+
+            // Barrier chips
+            const barrierBox = document.getElementById('barrierChips');
+            barrierBox.innerHTML = '';
+            const b = summary.barriers_summary;
+
+            const addChip = (icon, text, val, isBad) => {
+                const span = document.createElement('span');
+                span.className = 'chip';
+                if (isBad && val > 0) span.style.color = 'var(--red)';
+                span.innerHTML = `<i class="${icon}"></i> ${text}: <b>${val}</b>`;
+                barrierBox.appendChild(span);
+            };
+
+            addChip('fa-solid fa-stairs', 'Schody', b.stairs, true);
+            addChip('fa-solid fa-mountain', 'Strome podjazdy', b.high_slopes, true);
+            addChip('fa-solid fa-cubes', 'Kostka/żwir', b.cobblestone, true);
+            addChip('fa-solid fa-ban', 'Wysokie krawężniki', b.raised_kerbs, true);
+
+            // Provenance card
+            const provBox = document.getElementById('provenanceCard');
+            provBox.innerHTML = `
+                <div><strong>Źródło:</strong> ${provenance.source}</div>
+                <div><strong>Weryfikacja:</strong> ${provenance.verification_status} (${provenance.last_updated})</div>
+                <div style="font-style: italic;">${provenance.disclaimer}</div>
+            `;
+        }
+
+        let activeSegmentHighlight = null;
+        let activeSegmentMarker = null;
+
+        function clearActiveSegmentHighlight() {
+            if (activeSegmentHighlight) {
+                map.removeLayer(activeSegmentHighlight);
+                activeSegmentHighlight = null;
+            }
+            if (activeSegmentMarker) {
+                map.removeLayer(activeSegmentMarker);
+                activeSegmentMarker = null;
+            }
+            document.querySelectorAll('.step-item').forEach(el => el.classList.remove('selected-step'));
+        }
+
+        function highlightStepOnMap(step, itemElement) {
+            if (!step.coords || step.coords.length < 2) return;
+
+            clearActiveSegmentHighlight();
+            if (itemElement) itemElement.classList.add('selected-step');
+
+            const pts = step.coords.map(c => [c[1], c[0]]);
+            const bounds = L.latLngBounds(pts);
+
+            // Draw glowing highlighted polyline
+            const highlightColor = step.has_warning ? '#ff5555' : '#ffb86c';
+            activeSegmentHighlight = L.polyline(pts, {
+                color: highlightColor,
+                weight: 12,
+                opacity: 0.95,
+                lineCap: 'round',
+                lineJoin: 'round'
+            }).addTo(map);
+
+            // Place pulsing alert marker at midpoint
+            const midIdx = Math.floor(pts.length / 2);
+            const midPt = pts[midIdx];
+
+            const iconEmoji = step.has_stairs ? '🪜' : (step.max_slope_pct > 6 ? '⛰️' : '⚠️');
+            const pulseIcon = L.divIcon({
+                className: 'leaflet-div-icon',
+                html: `
+                    <div class="pulse-marker-box">
+                        <div class="pulse-ring"></div>
+                        <div class="pulse-badge">${iconEmoji}</div>
+                    </div>
+                `,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20]
+            });
+
+            activeSegmentMarker = L.marker(midPt, { icon: pulseIcon }).addTo(map);
+
+            const warningInfo = step.warning ? `<div style="color: #e74c3c; font-weight: 700; margin-bottom: 6px;">⚠️ ${step.warning}</div>` : '';
+            const popupContent = `
+                <div style="font-family: sans-serif; padding: 4px; min-width: 200px;">
+                    <div style="font-weight: 700; font-size: 0.98rem; margin-bottom: 4px; color: #2c3e50;">${step.step_number}. ${step.street_name}</div>
+                    ${warningInfo}
+                    <div style="font-size: 0.84rem; color: #555; line-height: 1.4;">
+                        <b>Dystans:</b> ${step.distance_m} m<br>
+                        <b>Nawierzchnia:</b> ${step.surface}<br>
+                        <b>Max nachylenie:</b> ${step.max_slope_pct}%
+                    </div>
+                    <button class="btn-exclude-small" style="margin-top: 8px; width: 100%; padding: 6px; font-size: 0.82rem;" onclick="excludeEdges(event, ${JSON.stringify(step.edge_ids)})">
+                        ⛔ Wyklucz ten odcinek z trasy
+                    </button>
+                </div>
+            `;
+
+            activeSegmentMarker.bindPopup(popupContent, { offset: [0, -10] }).openPopup();
+
+            // Smooth map animation
+            map.flyToBounds(bounds, { padding: [120, 120], maxZoom: 18, duration: 0.8 });
+        }
+
+        function renderInstructions(instructions) {
+            const container = document.getElementById('instructionsList');
+            const wrapper = document.getElementById('instructionsWrapper');
+            document.getElementById('stepsCount').textContent = instructions.length;
+
+            container.innerHTML = '';
+            wrapper.style.display = 'block';
+
+            instructions.forEach(step => {
+                const item = document.createElement('div');
+                item.className = `step-item ${step.has_warning ? 'has-warning' : ''}`;
+
+                let warningHtml = '';
+                if (step.warning) {
+                    warningHtml = `
+                        <div class="step-warning">
+                            <span>⚠️ ${step.warning}</span>
+                            <div style="display: flex; gap: 4px;">
+                                <button class="btn-exclude-small" style="background: rgba(255,184,108,0.2); color: var(--orange); border-color: var(--orange);" onclick="event.stopPropagation(); highlightStepOnMap(${JSON.stringify(step).replace(/"/g, '&quot;')}, this.closest('.step-item'))">
+                                    🔍 Pokaż barierę
+                                </button>
+                                <button class="btn-exclude-small" onclick="excludeEdges(event, ${JSON.stringify(step.edge_ids)})">
+                                    ⛔ Wyklucz
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                item.innerHTML = `
+                    <div class="step-header">
+                        <span>${step.step_number}. ${step.street_name}</span>
+                        <span>${step.distance_m} m</span>
+                    </div>
+                    <div class="step-meta">
+                        <span>Nawierzchnia: ${step.surface}</span>
+                        <span>• Nachylenie: max ${step.max_slope_pct}%</span>
+                    </div>
+                    ${warningHtml}
+                `;
+
+                // Highlight segment on click
+                item.addEventListener('click', () => {
+                    highlightStepOnMap(step, item);
+                });
+
+                container.appendChild(item);
+            });
+        }
+
+        function excludeEdges(evt, edgeIds) {
+            evt.stopPropagation();
+            if (confirm('Czy na pewno chcesz wykluczyć ten odcinek z trasy i przeliczyć najkrótszą drogę?')) {
+                excludedEdgeIds.push(...edgeIds);
+                fetchRoute();
+            }
+        }
+
+        // Attach listeners
+        document.getElementById('btnCalculateRoute').addEventListener('click', fetchRoute);
+
+        // Run on load
+        window.addEventListener('DOMContentLoaded', () => {
+            initMap();
+        });
+    </script>
+</body>
+</html>
