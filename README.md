@@ -52,3 +52,8 @@ To install pre-commit hooks run:
 ```bash
 pre-commit install
 ```
+
+# Ideas:
+
+- mark places where you can rent a wheelchair (for tourists) 
+- mark places like museums where you can borrow a wheelchair
