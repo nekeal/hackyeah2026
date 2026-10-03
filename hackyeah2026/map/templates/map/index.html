@@ -112,11 +112,7 @@
         <h1>Kraków Bez Barier</h1>
         <p>Eksplorator nawierzchni wygenerowany w oparciu o graf pieszy OSM.</p>
 
-        <button id="loadDataBtn" style="padding: 10px; background: var(--accent); color: #fff; border: none; border-radius: 5px; cursor: pointer; font-size: 1rem; font-weight: bold;">
-            Wczytaj Sieć 3D
-        </button>
-
-        <div id="loader" class="loader">Pobieranie i renderowanie geojson...</div>
+        <div id="loader" class="loader" style="display: block;">Pobieranie i renderowanie danych nawierzchni...</div>
 
         <div class="filter-group">
             <h3>Widoczność Nawierzchni</h3>
@@ -139,7 +135,7 @@
         </div>
 
         <div style="font-size: 0.8rem; color: #6272a4; margin-top: auto;">
-            Wykorzystuje lokalny plik roads_3d.geojson wyciągnięty przez osmnx & pyrosm.
+            Wykorzystuje dane nawierzchni wyciągnięte z OSM.
         </div>
     </div>
 
@@ -223,16 +219,10 @@
             }).addTo(map);
         }
 
-        // Obsługa wczytywania danych
-        document.getElementById('loadDataBtn').addEventListener('click', async () => {
-            const btn = document.getElementById('loadDataBtn');
+        // Automatyczne pobieranie i ładowanie danych przy wczytaniu strony
+        async function loadRoadsData() {
             const loader = document.getElementById('loader');
-
-            btn.style.display = 'none';
-            loader.style.display = 'block';
-
             try {
-                // Ścieżka skonfigurowana w Django
                 const response = await fetch('/map/api/roads/');
                 if (!response.ok) throw new Error("Brak pliku na serwerze");
 
@@ -245,7 +235,9 @@
                 loader.textContent = 'Błąd wczytywania danych: ' + e.message;
                 loader.style.color = '#ff5555';
             }
-        });
+        }
+
+        loadRoadsData();
 
         // Nasłuchiwanie checkboxów
         document.querySelectorAll('.surface-filter').forEach(cb => {
