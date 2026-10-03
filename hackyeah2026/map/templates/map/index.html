@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kraków Bez Barier - Mapa Nawierzchni</title>
+    <title>Kraków Bez Barier - Mapa Nawierzchni i Nachylenia</title>
 
     <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -67,13 +67,15 @@
         }
 
         .filter-group label {
-            display: block;
+            display: flex;
+            align-items: center;
             margin-bottom: 8px;
             cursor: pointer;
             font-size: 0.95rem;
         }
 
-        .filter-group input[type="checkbox"] {
+        .filter-group input[type="checkbox"],
+        .filter-group input[type="radio"] {
             margin-right: 10px;
             accent-color: var(--accent);
             transform: scale(1.2);
@@ -86,10 +88,12 @@
             border-radius: 3px;
             margin-right: 8px;
             vertical-align: middle;
+            flex-shrink: 0;
         }
 
         .c-good { background-color: #50fa7b; }
         .c-medium { background-color: #f1fa8c; }
+        .c-steep { background-color: #ffb86c; }
         .c-bad { background-color: #ff5555; }
         .c-unknown { background-color: #8be9fd; }
 
@@ -110,11 +114,25 @@
 
     <div id="sidebar">
         <h1>Kraków Bez Barier</h1>
-        <p>Eksplorator nawierzchni wygenerowany w oparciu o graf pieszy OSM.</p>
+        <p>Eksplorator tras pieszych wygenerowany w oparciu o dane OSM i DEM.</p>
 
-        <div id="loader" class="loader" style="display: block;">Pobieranie i renderowanie danych nawierzchni...</div>
+        <div id="loader" class="loader" style="display: block;">Pobieranie i renderowanie danych tras...</div>
 
+        <!-- Wybór trybu wizualizacji -->
         <div class="filter-group">
+            <h3>Tryb Wizualizacji</h3>
+            <label>
+                <input type="radio" name="visMode" value="surface" checked>
+                <span>Rodzaje nawierzchni</span>
+            </label>
+            <label>
+                <input type="radio" name="visMode" value="grade">
+                <span>Kąt nachylenia (stromość)</span>
+            </label>
+        </div>
+
+        <!-- Filtry dla Nawierzchni -->
+        <div id="surfaceFilterPanel" class="filter-group">
             <h3>Widoczność Nawierzchni</h3>
             <label>
                 <input type="checkbox" class="surface-filter" value="good" checked>
@@ -134,8 +152,29 @@
             </label>
         </div>
 
+        <!-- Filtry dla Nachylenia -->
+        <div id="gradeFilterPanel" class="filter-group" style="display: none;">
+            <h3>Widoczność Nachylenia</h3>
+            <label>
+                <input type="checkbox" class="grade-filter" value="flat" checked>
+                <span class="legend-color c-good"></span> Płasko (&lt; 3%)
+            </label>
+            <label>
+                <input type="checkbox" class="grade-filter" value="moderate" checked>
+                <span class="legend-color c-medium"></span> Łagodny podjazd (3% – 6%)
+            </label>
+            <label>
+                <input type="checkbox" class="grade-filter" value="steep" checked>
+                <span class="legend-color c-steep"></span> Stromy podjazd (6% – 10%)
+            </label>
+            <label>
+                <input type="checkbox" class="grade-filter" value="critical" checked>
+                <span class="legend-color c-bad"></span> Bardzo stromo / Bariera (&gt; 10%)
+            </label>
+        </div>
+
         <div style="font-size: 0.8rem; color: #6272a4; margin-top: auto;">
-            Wykorzystuje dane nawierzchni wyciągnięte z OSM.
+            Wykorzystuje dane nawierzchni i nachylenia (SRTM DEM) z OSM.
         </div>
     </div>
 
@@ -154,7 +193,6 @@
             maxZoom: 20
         }).addTo(map);
 
-        // Zapewnia poprawne wyrenderowanie mapy przy flexboxie
         setTimeout(() => map.invalidateSize(), 100);
 
         // Klasyfikacja nawierzchni
@@ -162,24 +200,43 @@
         const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'sett', 'fine_gravel', 'grass_paver'];
         const surfacesBad = ['pebblestone', 'sand', 'mud', 'cobblestone', 'unhewn_cobblestone', 'metal_grid', 'stepping_stones'];
 
-        // Osobne warstwy dla każdej kategorii (dla błyskawicznego przełączania)
-        const categoryLayers = {
-            good: L.layerGroup().addTo(map),
-            medium: L.layerGroup().addTo(map),
-            bad: L.layerGroup().addTo(map),
-            unknown: L.layerGroup().addTo(map)
+        // Grupy warstw dla nawierzchni
+        const surfaceLayers = {
+            good: L.layerGroup(),
+            medium: L.layerGroup(),
+            bad: L.layerGroup(),
+            unknown: L.layerGroup()
         };
 
-        function getCategory(surface) {
+        // Grupy warstw dla nachylenia
+        const gradeLayers = {
+            flat: L.layerGroup(),
+            moderate: L.layerGroup(),
+            steep: L.layerGroup(),
+            critical: L.layerGroup()
+        };
+
+        let currentVisMode = 'surface';
+
+        function getSurfaceCategory(surface) {
             if (!surface || surface === "nan") return "unknown";
             surface = surface.toLowerCase();
             if (surfacesGood.includes(surface)) return "good";
             if (surfacesMedium.includes(surface)) return "medium";
             if (surfacesBad.includes(surface)) return "bad";
-            return "unknown"; // domyslnie reszta jako nieznane
+            return "unknown";
         }
 
-        function getColor(category) {
+        function getGradeCategory(gradeVal) {
+            if (gradeVal === undefined || gradeVal === null || isNaN(gradeVal)) return "flat";
+            const absGrade = Math.abs(parseFloat(gradeVal));
+            if (absGrade < 0.03) return "flat";
+            if (absGrade < 0.06) return "moderate";
+            if (absGrade < 0.10) return "steep";
+            return "critical";
+        }
+
+        function getSurfaceColor(category) {
             switch(category) {
                 case 'good': return '#50fa7b';
                 case 'medium': return '#f1fa8c';
@@ -188,7 +245,17 @@
             }
         }
 
-        // Automatyczne pobieranie i ładowanie danych przy wczytaniu strony
+        function getGradeColor(category) {
+            switch(category) {
+                case 'flat': return '#50fa7b';
+                case 'moderate': return '#f1fa8c';
+                case 'steep': return '#ffb86c';
+                case 'critical': return '#ff5555';
+                default: return '#8be9fd';
+            }
+        }
+
+        // Automatyczne pobieranie i ładowanie danych
         async function loadRoadsData() {
             const loader = document.getElementById('loader');
             try {
@@ -197,24 +264,27 @@
 
                 const roadsData = await response.json();
 
-                // Jednorazowe rozdzielenie cech do 4 warstw
-                const groupedFeatures = { good: [], medium: [], bad: [], unknown: [] };
+                const groupedSurface = { good: [], medium: [], bad: [], unknown: [] };
+                const groupedGrade = { flat: [], moderate: [], steep: [], critical: [] };
 
                 for (const feature of roadsData.features) {
-                    const cat = getCategory(feature.properties.surface);
-                    groupedFeatures[cat].push(feature);
+                    const sCat = getSurfaceCategory(feature.properties.surface);
+                    groupedSurface[sCat].push(feature);
+
+                    const gCat = getGradeCategory(feature.properties.grade);
+                    groupedGrade[gCat].push(feature);
                 }
 
-                // Dodanie unikalnych warstw GeoJSON do LayerGroup
-                Object.keys(groupedFeatures).forEach(cat => {
-                    const geoLayer = L.geoJSON({ type: "FeatureCollection", features: groupedFeatures[cat] }, {
+                // Budowanie warstw nawierzchni
+                Object.keys(groupedSurface).forEach(cat => {
+                    const geoLayer = L.geoJSON({ type: "FeatureCollection", features: groupedSurface[cat] }, {
                         style: {
-                            color: getColor(cat),
+                            color: getSurfaceColor(cat),
                             weight: cat === 'bad' ? 4 : 2,
                             opacity: 0.8
                         },
                         onEachFeature: function (feature, layer) {
-                            let popupContent = `<b>Kategoria:</b> ${cat}<br/>`;
+                            let popupContent = `<b>Kategoria nawierzchni:</b> ${cat}<br/>`;
                             popupContent += `<b>Nawierzchnia (OSM):</b> ${feature.properties.surface || 'brak'}<br/>`;
                             if (feature.properties.grade !== undefined && feature.properties.grade !== null) {
                                 popupContent += `<b>Nachylenie:</b> ${(parseFloat(feature.properties.grade) * 100).toFixed(1)}%<br/>`;
@@ -223,8 +293,32 @@
                             layer.bindPopup(popupContent);
                         }
                     });
-                    categoryLayers[cat].addLayer(geoLayer);
+                    surfaceLayers[cat].addLayer(geoLayer);
                 });
+
+                // Budowanie warstw nachylenia
+                Object.keys(groupedGrade).forEach(cat => {
+                    const geoLayer = L.geoJSON({ type: "FeatureCollection", features: groupedGrade[cat] }, {
+                        style: {
+                            color: getGradeColor(cat),
+                            weight: (cat === 'steep' || cat === 'critical') ? 4 : 2,
+                            opacity: 0.85
+                        },
+                        onEachFeature: function (feature, layer) {
+                            let popupContent = `<b>Kategoria nachylenia:</b> ${cat}<br/>`;
+                            if (feature.properties.grade !== undefined && feature.properties.grade !== null) {
+                                popupContent += `<b>Nachylenie:</b> ${(parseFloat(feature.properties.grade) * 100).toFixed(1)}%<br/>`;
+                            }
+                            popupContent += `<b>Nawierzchnia:</b> ${feature.properties.surface || 'brak'}<br/>`;
+                            if (feature.properties.highway) popupContent += `<b>Typ drogi:</b> ${feature.properties.highway}`;
+                            layer.bindPopup(popupContent);
+                        }
+                    });
+                    gradeLayers[cat].addLayer(geoLayer);
+                });
+
+                // Domyślnie włączamy warstwy nawierzchni
+                updateVisibleLayers();
 
                 setTimeout(() => map.invalidateSize(), 100);
                 loader.style.display = 'none';
@@ -234,17 +328,64 @@
             }
         }
 
+        function updateVisibleLayers() {
+            // Czyszczenie wszystkich warstw z mapy
+            Object.values(surfaceLayers).forEach(layer => map.removeLayer(layer));
+            Object.values(gradeLayers).forEach(layer => map.removeLayer(layer));
+
+            if (currentVisMode === 'surface') {
+                document.querySelectorAll('.surface-filter:checked').forEach(cb => {
+                    const cat = cb.value;
+                    if (surfaceLayers[cat]) map.addLayer(surfaceLayers[cat]);
+                });
+            } else if (currentVisMode === 'grade') {
+                document.querySelectorAll('.grade-filter:checked').forEach(cb => {
+                    const cat = cb.value;
+                    if (gradeLayers[cat]) map.addLayer(gradeLayers[cat]);
+                });
+            }
+        }
+
         loadRoadsData();
 
-        // Błyskawiczna obsługa checkboxów - dodawanie / usuwanie gotowej warstwy z mapy w < 5ms
+        // Obsługa przełączania trybu (Radio)
+        document.querySelectorAll('input[name="visMode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentVisMode = e.target.value;
+                if (currentVisMode === 'surface') {
+                    document.getElementById('surfaceFilterPanel').style.display = 'block';
+                    document.getElementById('gradeFilterPanel').style.display = 'none';
+                } else {
+                    document.getElementById('surfaceFilterPanel').style.display = 'none';
+                    document.getElementById('gradeFilterPanel').style.display = 'block';
+                }
+                updateVisibleLayers();
+            });
+        });
+
+        // Obsługa checkboxów nawierzchni
         document.querySelectorAll('.surface-filter').forEach(cb => {
             cb.addEventListener('change', (e) => {
-                const cat = e.target.value;
-                if (categoryLayers[cat]) {
+                if (currentVisMode === 'surface') {
+                    const cat = e.target.value;
                     if (e.target.checked) {
-                        map.addLayer(categoryLayers[cat]);
+                        map.addLayer(surfaceLayers[cat]);
                     } else {
-                        map.removeLayer(categoryLayers[cat]);
+                        map.removeLayer(surfaceLayers[cat]);
+                    }
+                }
+            });
+        });
+
+        // Obsługa checkboxów nachylenia
+        document.querySelectorAll('.grade-filter').forEach(cb => {
+            cb.addEventListener('change', (e) => {
+                if (currentVisMode === 'grade') {
+                    const cat = e.target.value;
+                    if (e.target.checked) {
+                        map.addLayer(gradeLayers[cat]);
+                    } else {
+                        map.removeLayer(gradeLayers[cat]);
                     }
                 }
             });
