@@ -100,9 +100,19 @@ print("\nKROK 2: Pobieranie siatki ścieżek (walk) z LOKALNEGO pliku PBF (offli
 # Tworzymy nową instancję OSM, aby uniknąć błędów stanu po wcześniejszym filtrowaniu
 osm_network = OSM(pbf_filename)
 osm_network.bounding_box = krakow_bbox
-# Włączamy zachowywanie kluczowych tagów dla skrzyżowań i przejść, które są krytyczne dla wózków!
-osm_network.keep_node_info_tags = ["crossing", "kerb", "tactile_paving", "highway", "wheelchair"]
-nodes_gdf, edges_gdf = osm_network.get_network(network_type="walking", nodes=True)
+
+# Włączamy zachowywanie kluczowych tagów dla skrzyżowań (przeszkody i udogodnienia)
+osm_network.keep_node_info_tags = ["crossing", "kerb", "tactile_paving", "highway", "wheelchair", "barrier", "elevator"]
+# Włączamy zachowywanie kluczowych tagów dla ścieżek i dróg (schody, windy, nawierzchnia, strome zjazdy)
+# pyrosm domyślnie ignoruje niektóre z nich na rzecz szybkiego parsowania, więc wymuszamy ich odczyt:
+if not hasattr(osm_network, "keep_way_info_tags"):
+    # Fallback dla starszych/innych wersji pyrosm
+    pass
+# Dodatkowo możemy dodać te tagi do własnych filtrów, ale pyrosm domyślnie na krawędziach zostawia dużo.
+# Jednak zrobimy to przez specjalny custom_filter dla pyrosm, aby wyciągnął max danych:
+nodes_gdf, edges_gdf = osm_network.get_network(
+    network_type="walking", nodes=True, extra_attributes=["surface", "smoothness", "wheelchair", "incline", "ramp"]
+)
 
 # Przekształcamy na graf NetworkX
 graph_nx = osm_network.to_graph(nodes_gdf, edges_gdf, graph_type="networkx", direction="oneway")
@@ -160,8 +170,21 @@ print(" Zapisano 'city_network_3d.graphml'")
 # Osobny eksport krawędzi do GeoJSONa, żeby frontend/mapa łatwo mogła pokolorować strome chodniki na czerwono
 gdf_nodes, gdf_edges = ox.graph_to_gdfs(graph)
 # Aby GeoJSON mógł się zapisać, musimy usunąć kolumny będące listami (np. osmid czasem jest listą)
+allowed_edge_cols = [
+    "geometry",
+    "grade",
+    "grade_abs",
+    "length",
+    "highway",
+    "name",
+    "surface",
+    "smoothness",
+    "wheelchair",
+    "incline",
+    "ramp",
+]
 for col in gdf_edges.columns:
-    if col not in ["geometry", "grade", "grade_abs", "length", "highway", "name"]:
+    if col not in allowed_edge_cols:
         gdf_edges = gdf_edges.drop(columns=[col])
 
 # Rzutujemy pozostałe wartości tekstowe na string by uniknąć problemów z listami
