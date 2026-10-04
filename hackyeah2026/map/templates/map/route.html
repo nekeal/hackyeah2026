@@ -941,7 +941,20 @@
                 iconAnchor: [16, 16]
             });
 
-            startMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+            startMarker = L.marker([lat, lng], {
+                icon: icon,
+                draggable: true,
+                bubblingMouseEvents: false,
+                title: 'Punkt A (Start)'
+            }).addTo(map);
+            startMarker.on('dragend', (event) => {
+                const point = event.target.getLatLng();
+                const coordinates = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+                document.getElementById('inputStart').value = coordinates;
+                activePointSelect = null;
+                document.body.style.cursor = 'default';
+                announceToSR(`Punkt A przeniesiony na ${coordinates}. Kliknij przycisk Wyznacz Dostępną Trasę, aby przeliczyć trasę.`);
+            });
         }
 
         function setEndPoint(lat, lng) {
@@ -955,7 +968,20 @@
                 iconAnchor: [16, 16]
             });
 
-            endMarker = L.marker([lat, lng], { icon: icon }).addTo(map);
+            endMarker = L.marker([lat, lng], {
+                icon: icon,
+                draggable: true,
+                bubblingMouseEvents: false,
+                title: 'Punkt B (Cel)'
+            }).addTo(map);
+            endMarker.on('dragend', (event) => {
+                const point = event.target.getLatLng();
+                const coordinates = `${point.lat.toFixed(5)}, ${point.lng.toFixed(5)}`;
+                document.getElementById('inputEnd').value = coordinates;
+                activePointSelect = null;
+                document.body.style.cursor = 'default';
+                announceToSR(`Punkt B przeniesiony na ${coordinates}. Kliknij przycisk Wyznacz Dostępną Trasę, aby przeliczyć trasę.`);
+            });
         }
 
         function swapPoints() {
