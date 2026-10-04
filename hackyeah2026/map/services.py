@@ -407,7 +407,7 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
         is_steps, is_high_slope, is_cobblestones, is_raised_kerb, data, grade_pct, surface_label
     )
 
-    has_missing_data = cleaned_surface is None or cleaned_kerb is None
+    has_missing_data = cleaned_surface is None
     data_status = "unknown" if has_missing_data else "verified"
 
     return {
