@@ -958,7 +958,7 @@
         }
 
         function displayRouteResult(data) {
-            // Draw polyline on map
+            // Draw polyline on map with high-contrast outer casing
             if (routePolyline) map.removeLayer(routePolyline);
 
             const feature = data.geojson || data.route_geojson || data;
@@ -968,20 +968,37 @@
                 // LatLng array for Leaflet [lat, lon]
                 const latLngs = geom.coordinates.map(c => [c[1], c[0]]);
 
-                // Dynamic gradient or color depending on route status
-                let color = '#bd93f9';
-                if (data.summary && data.summary.accessibility_status.includes('Pełna')) color = '#50fa7b';
-                else if (data.summary && data.summary.accessibility_status.includes('Dostępna')) color = '#f1fa8c';
-                else if (data.summary && data.summary.accessibility_status.includes('Utrudniona')) color = '#ff5555';
+                // Dynamic high-contrast colors depending on route status
+                let color = '#a855f7'; // Neutral violet
+                if (data.summary && data.summary.accessibility_status.includes('Pełna')) color = '#00e676'; // High-vis Green
+                else if (data.summary && data.summary.accessibility_status.includes('Dostępna')) color = '#ffab00'; // High-vis Amber/Gold
+                else if (data.summary && data.summary.accessibility_status.includes('Utrudniona')) color = '#ff2a2a'; // High-vis Red
 
-                routePolyline = L.polyline(latLngs, {
+                const routeGroup = L.layerGroup();
+
+                // 1. Dark outer casing border for maximum contrast against any map background
+                const routeCasing = L.polyline(latLngs, {
+                    color: '#111827',
+                    weight: 10,
+                    opacity: 0.85,
+                    lineCap: 'round',
+                    lineJoin: 'round'
+                });
+                routeGroup.addLayer(routeCasing);
+
+                // 2. Vibrant inner line
+                const routeLine = L.polyline(latLngs, {
                     color: color,
                     weight: 6,
-                    opacity: 0.9,
+                    opacity: 1.0,
+                    lineCap: 'round',
                     lineJoin: 'round'
-                }).addTo(map);
+                });
+                routeGroup.addLayer(routeLine);
 
-                map.fitBounds(routePolyline.getBounds(), { padding: [50, 50] });
+                routePolyline = routeGroup.addTo(map);
+
+                map.fitBounds(routeLine.getBounds(), { padding: [50, 50] });
             }
 
             // Populate Summary Card
@@ -1075,15 +1092,29 @@
 
             const latLngs = coords.map(c => [c[1], c[0]]);
 
-            // Draw highlighted route segment on map
-            activeSegmentHighlight = L.polyline(latLngs, {
-                color: '#ffb86c',
-                weight: 10,
-                opacity: 0.95,
-                lineCap: 'round'
-            }).addTo(map);
+            // Draw highlighted route segment on map with casing
+            const stepGroup = L.layerGroup();
+            const stepCasing = L.polyline(latLngs, {
+                color: '#000000',
+                weight: 14,
+                opacity: 0.9,
+                lineCap: 'round',
+                lineJoin: 'round'
+            });
+            stepGroup.addLayer(stepCasing);
 
-            const bounds = activeSegmentHighlight.getBounds();
+            const stepLine = L.polyline(latLngs, {
+                color: '#ff922b',
+                weight: 9,
+                opacity: 1.0,
+                lineCap: 'round',
+                lineJoin: 'round'
+            });
+            stepGroup.addLayer(stepLine);
+
+            activeSegmentHighlight = stepGroup.addTo(map);
+
+            const bounds = stepCasing.getBounds();
             const center = bounds.getCenter();
 
             // Create pulsing warning marker if step has a warning
