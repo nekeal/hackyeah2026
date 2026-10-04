@@ -252,37 +252,37 @@
 
 {% block content %}
     <!-- ═══ FILTER SIDEBAR ═══════════════════════════════════════════ -->
-    <div id="sidebar" role="navigation" aria-label="Filtry kategorii">
+    <div id="sidebar" role="region" aria-label="Filtry kategorii">
         <h1>♿ Dostępne POI</h1>
-        <p id="poi-count">Wczytywanie…</p>
+        <p id="poi-count" role="status" aria-live="polite">Wczytywanie…</p>
 
         <button id="toggle-all">Zaznacz / odznacz wszystkie</button>
 
         <div class="filter-group">
             <h3>🍽️ Gastronomia</h3>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="restaurant" checked><span class="dot dc-restaurant"></span> Restauracje</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="cafe"       checked><span class="dot dc-cafe"></span> Kawiarnie</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="fast_food"  checked><span class="dot dc-restaurant"></span> Fast food</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pub"        checked><span class="dot dc-cafe"></span> Puby / Bary</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="restaurant" checked><span class="dot dc-restaurant" aria-hidden="true"></span> Restauracje</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="cafe"       checked><span class="dot dc-cafe" aria-hidden="true"></span> Kawiarnie</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="fast_food"  checked><span class="dot dc-restaurant" aria-hidden="true"></span> Fast food</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pub"        checked><span class="dot dc-cafe" aria-hidden="true"></span> Puby / Bary</label>
         </div>
 
         <div class="filter-group">
             <h3>🏛️ Atrakcje i kultura</h3>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="tourism" checked><span class="dot dc-tourism"></span> Muzea / Hotele / Atrakcje</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="historic" checked><span class="dot dc-historic"></span> Zabytki / Pomniki</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="tourism" checked><span class="dot dc-tourism" aria-hidden="true"></span> Muzea / Hotele / Atrakcje</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="historic" checked><span class="dot dc-historic" aria-hidden="true"></span> Zabytki / Pomniki</label>
         </div>
 
         <div class="filter-group">
             <h3>🚌 Transport</h3>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="transport" checked><span class="dot dc-transport"></span> Przystanki / Stacje</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="transport" checked><span class="dot dc-transport" aria-hidden="true"></span> Przystanki / Stacje</label>
         </div>
 
         <div class="filter-group">
             <h3>🏪 Usługi</h3>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pharmacy" checked><span class="dot dc-pharmacy"></span> Apteki</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="toilets"  checked><span class="dot dc-toilets"></span> Toalety</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="shop"     checked><span class="dot dc-shop"></span> Sklepy</label>
-            <label class="filter-label"><input type="checkbox" class="cat-filter" value="other"    checked><span class="dot dc-other"></span> Inne</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="pharmacy" checked><span class="dot dc-pharmacy" aria-hidden="true"></span> Apteki</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="toilets"  checked><span class="dot dc-toilets" aria-hidden="true"></span> Toalety</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="shop"     checked><span class="dot dc-shop" aria-hidden="true"></span> Sklepy</label>
+            <label class="filter-label"><input type="checkbox" class="cat-filter" value="other"    checked><span class="dot dc-other" aria-hidden="true"></span> Inne</label>
         </div>
 
         <div class="sidebar-footer">
@@ -297,7 +297,7 @@
     <!-- ═══ DETAILS DRAWER ══════════════════════════════════════════ -->
     <aside id="drawer" role="complementary" aria-label="Szczegóły miejsca" aria-hidden="true">
         <div id="drawer-handle" aria-hidden="true"></div>
-        <button id="drawer-close" aria-label="Zamknij panel">✕</button>
+        <button id="drawer-close" aria-label="Zamknij panel"><span aria-hidden="true">✕</span></button>
         <div id="drawer-inner">
             <!-- filled by JS -->
         </div>
@@ -587,11 +587,14 @@
     const drawer      = document.getElementById('drawer');
     const drawerInner = document.getElementById('drawer-inner');
     const drawerClose = document.getElementById('drawer-close');
+    let lastFocusedElement = null;
 
     function openDrawer(props) {
+        lastFocusedElement = document.activeElement;
         drawerInner.innerHTML = buildDrawer(props);
         drawer.classList.add('open');
         drawer.setAttribute('aria-hidden', 'false');
+        drawerClose.focus();
         // On desktop, shrink map right edge so drawer doesn't overlap
         const isMobile = window.innerWidth <= 700;
         if (!isMobile) {
@@ -607,6 +610,10 @@
         if (!isMobile) {
             document.getElementById('map').style.right = '0';
             setTimeout(() => map.invalidateSize(), 340);
+        }
+        if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+            lastFocusedElement.focus();
+            lastFocusedElement = null;
         }
     }
 

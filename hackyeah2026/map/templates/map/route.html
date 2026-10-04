@@ -551,15 +551,17 @@
         </div>
 
         <button id="btnCalculateRoute" class="btn-primary">
-            <i class="fa-solid fa-route"></i> Wyznacz Dostępną Trasę
+            <i class="fa-solid fa-route" aria-hidden="true"></i> Wyznacz Dostępną Trasę
         </button>
 
-        <div id="loader" class="loader-spinner">
-            <i class="fa-solid fa-spinner fa-spin"></i> Obliczanie optymalnej trasy 3D...
+        <div id="routeErrorAlert" class="status-badge status-difficult" role="alert" aria-live="assertive" style="display: none; width: 100%; margin: 8px 0; text-align: left; padding: 10px 12px; font-size: 0.86rem; font-weight: 600;"></div>
+
+        <div id="loader" class="loader-spinner" role="status" aria-live="polite">
+            <i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Obliczanie optymalnej trasy 3D...
         </div>
 
         <!-- Summary Container -->
-        <div id="summaryContainer" style="display: none;">
+        <div id="summaryContainer" role="status" aria-live="polite" style="display: none;">
             <div class="section-title">
                 <i class="fa-solid fa-chart-pie"></i> Podsumowanie Trasy
             </div>
@@ -866,12 +868,29 @@
             return null;
         }
 
+        function showRouteError(msg) {
+            const errEl = document.getElementById('routeErrorAlert');
+            if (errEl) {
+                errEl.textContent = '⚠️ ' + msg;
+                errEl.style.display = 'block';
+            }
+        }
+
+        function clearRouteError() {
+            const errEl = document.getElementById('routeErrorAlert');
+            if (errEl) {
+                errEl.textContent = '';
+                errEl.style.display = 'none';
+            }
+        }
+
         function fetchRoute() {
+            clearRouteError();
             const start = parseCoords(document.getElementById('inputStart').value);
             const end = parseCoords(document.getElementById('inputEnd').value);
 
             if (!start || !end) {
-                alert('Podaj poprawne współrzędne dla Punktu A i B (format: lat, lon)');
+                showRouteError('Podaj poprawne współrzędne dla Punktu A i B (format: lat, lon)');
                 return;
             }
 
@@ -901,7 +920,7 @@
                 document.getElementById('loader').style.display = 'none';
 
                 if (data.error || data.status === 'error') {
-                    alert('Błąd wyznaczania trasy: ' + (data.error || data.message));
+                    showRouteError('Błąd wyznaczania trasy: ' + (data.error || data.message));
                     return;
                 }
 
@@ -909,7 +928,7 @@
             })
             .catch(err => {
                 document.getElementById('loader').style.display = 'none';
-                alert('Błąd połączenia z serwerem: ' + err);
+                showRouteError('Błąd połączenia z serwerem: ' + err);
             });
         }
 
@@ -1083,6 +1102,9 @@
             instructions.forEach(step => {
                 const item = document.createElement('div');
                 item.className = `step-item ${step.has_warning ? 'has-warning' : ''}`;
+                item.setAttribute('tabindex', '0');
+                item.setAttribute('role', 'button');
+                item.setAttribute('aria-label', `Krok ${step.step_number}: ${step.street_name}, długość ${step.distance_m} metrów`);
 
                 let warningHtml = '';
                 if (step.warning) {
@@ -1090,10 +1112,10 @@
                         <div class="step-warning">
                             <span>⚠️ ${step.warning}</span>
                             <div style="display: flex; gap: 4px;">
-                                <button class="btn-exclude-small btn-show-barrier" style="background: rgba(255,184,108,0.2); color: var(--orange); border-color: var(--orange);">
+                                <button type="button" class="btn-exclude-small btn-show-barrier" style="background: rgba(255,184,108,0.2); color: var(--orange); border-color: var(--orange);">
                                     🔍 Pokaż barierę
                                 </button>
-                                <button class="btn-exclude-small btn-exclude-step">
+                                <button type="button" class="btn-exclude-small btn-exclude-step">
                                     ⛔ Wyklucz
                                 </button>
                             </div>
@@ -1113,9 +1135,15 @@
                     ${warningHtml}
                 `;
 
-                // Highlight segment on click
+                // Highlight segment on click or Enter/Space keypress
                 item.addEventListener('click', () => {
                     highlightStepOnMap(step, item);
+                });
+                item.addEventListener('keydown', (evt) => {
+                    if (evt.key === 'Enter' || evt.key === ' ') {
+                        evt.preventDefault();
+                        highlightStepOnMap(step, item);
+                    }
                 });
 
                 const showBtn = item.querySelector('.btn-show-barrier');

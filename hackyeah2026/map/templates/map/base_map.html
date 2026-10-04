@@ -25,13 +25,18 @@
             --blue:      #8be9fd;
             --orange:    #ffb86c;
             --pink:      #ff79c6;
-            --muted:     #6272a4;
+            --muted:     #94a3b8;
             --border:    #44475a;
             --sidebar-w: 340px;
             --drawer-w:  360px;
         }
 
         *, *::before, *::after { box-sizing: border-box; }
+
+        :focus-visible {
+            outline: 3px solid var(--accent) !important;
+            outline-offset: 2px !important;
+        }
 
         body, html {
             margin: 0;
