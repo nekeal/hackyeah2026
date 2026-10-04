@@ -109,14 +109,19 @@ walidacji z użytkownikami. Nie opisują medycznych możliwości osoby.
 | Gładkie przejście dla pieszych | Preferuj lub wymagaj zależnie od trybu |
 | Wąski chodnik | Nie akceptuj |
 | Asfalt | Akceptuj |
-| Ścieżka | Akceptuj |
-| Piasek | Nie akceptuj |
-| Żwir | Nie akceptuj |
-| Bruk / kocie łby | Nie akceptuj |
+| Gładka kostka / płyty (`paving_stones`, `sett` + `smoothness=good/excellent`) | Akceptuj |
+| Nierówny bruk / kocie łby | Nie akceptuj |
+| Piasek, żwir i miękkie podłoże | Nie akceptuj |
+| Nieznana lub niejednoznaczna nawierzchnia | Nie akceptuj domyślnie; osobny opt-in |
 
 W demo parametry muszą mieć widoczny wpływ na opis trasy. Jeżeli interfejs
 pokazuje zmianę ustawienia, powinien pokazać również, które odcinki zostały
 zaakceptowane, odrzucone albo oznaczone jako nieznane.
+
+Każda nawierzchnia bez wartości `smoothness` jest traktowana jako nieznana,
+a nie jako dostępna. Użytkownik może jawnie włączyć parametr
+`allow_unknown_surfaces`, ale wynik musi wtedy pokazać ostrzeżenie o odcinkach
+bez potwierdzonego stanu nawierzchni.
 
 ## Weryfikacja kandydata A/B
 

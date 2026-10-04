@@ -21,6 +21,14 @@ Przegląd obejmował:
 - testy routingu w `hackyeah2026/map/tests/`;
 - `data_provenance.json`.
 
+## Aktualizacja polityki nawierzchni
+
+Późniejsza korekta routingu rozdziela gładką kostkę, nierówny bruk, inne
+trudne nawierzchnie oraz stan nieznany. Odcinki o stanie nieznanym są obecnie
+wykluczane domyślnie i mogą być dopuszczone wyłącznie przez jawny parametr
+`allow_unknown_surfaces`. Automatyczny tryb alternatywny nie może obchodzić
+tego ograniczenia.
+
 ## Wniosek ogólny
 
 Mechanizm techniczny działa: punkty A i B można wybrać, graf jest ładowany i

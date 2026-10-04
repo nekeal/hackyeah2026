@@ -34,7 +34,7 @@ Nawierzchnie powodujące silne wibracje, duże opory toczenia, lub grząskie po 
 *   `gravel` (żwir) – **6 864**
 *   `grass` (trawa) – **5 356**
 *   `dirt` / `earth` (ziemia/klepisko) – **4 179**
-*   `sett` (kamienna kostka brukowa - ciosana, wyboista) – **2 122**
+*   `sett` (kamienna kostka brukowa - klasyfikowana według `smoothness`) – **2 122**
 *   `fine_gravel` (drobny żwir/szuter) – **2 079**
 *   `grass_paver` (ażurowe płyty trawnikowe) – **699** (Bardzo trudne dla małych przednich kółek wózka)
 
@@ -48,7 +48,11 @@ Nawierzchnie stanowiące bezpośrednie zagrożenie utknięcia lub przewrócenia 
 *   `stepping_stones` (kamienie deptane/przez wodę) – **56**
 
 ## Wnioski dla implementacji Django
-W module `services.py` przy wyznaczaniu wag w grafie (Dijkstra/A*), parametry te muszą posłużyć jako modyfikatory wagi:
+W module `services.py` przy wyznaczaniu wag w grafie (Dijkstra/A*), parametry te
+muszą posłużyć jako klasyfikacja i modyfikatory wagi:
 - Mnożnik `1.0` dla nawierzchni z grupy zielonej.
-- Mnożnik np. `2.0 - 4.0` dla grupy żółtej (omijaj jeśli to możliwe).
-- Mnożnik `∞` (Infinity / zakaz wjazdu) dla grupy czerwonej (chyba że użytkownik zaznaczy w preferencjach asystę drugiej osoby).
+- `sett` z `smoothness=good` lub `excellent` należy do grupy zielonej.
+- `sett` z `smoothness=intermediate` lub gorszym należy do grupy czerwonej.
+- Każda nawierzchnia bez `smoothness` należy do grupy nieznanej i jest wykluczana domyślnie.
+- Mnożnik `∞` (Infinity / zakaz wjazdu) stosujemy dla grup czerwonej i
+  nieznanej, chyba że użytkownik jawnie włączy odpowiedni parametr.
