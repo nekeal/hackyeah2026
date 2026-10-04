@@ -31,3 +31,8 @@ Each Django app MUST follow this specific file layout to reduce merge conflicts:
 - **Do not commit raw datasets**: Large `.osm`, `.osm.pbf`, `.graphml`, `.geojson`, or `.tif` files MUST be strictly added to `.gitignore`. They bloat the git repository.
 - **Reproducibility**: Any data transformation must be codified into a single pipeline script (e.g. `generate_static_data.py`) so anyone on the team can regenerate the data locally with one command. Scripts should automatically download missing data.
 - **Offline processing**: Prefer processing local datasets (like `.pbf` using `osmium`/`pyrosm`) over repeatedly hitting unstable public APIs (like Overpass API) to avoid timeout blocks during development.
+
+## 5. Frontend Visual Verification
+- **Running app**: The Dockerized Django server is expected to be available at `http://localhost:8000`; do not start a duplicate development server when it is already running.
+- **Browser checks**: For frontend changes, use the Playwright browser integration when available to inspect `http://localhost:8000/map/route/` and capture both desktop and mobile states.
+- **Interaction checks**: Verify keyboard focus, disclosure controls, responsive layout, loading/error states, and the main sidebar scroll behavior in the browser before concluding UI work.

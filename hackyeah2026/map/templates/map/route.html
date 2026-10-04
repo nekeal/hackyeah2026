@@ -17,6 +17,42 @@
             gap: 8px;
         }
 
+        .collapsible-section > summary {
+            cursor: pointer;
+            font-size: 0.8rem;
+            list-style: none;
+            margin: 0;
+            padding: 4px 6px;
+            border-radius: 6px;
+            transition: background 0.2s ease, color 0.2s ease;
+        }
+
+        .collapsible-section > summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .collapsible-section > summary::after {
+            content: "\f078";
+            font-family: "Font Awesome 6 Free";
+            font-size: 0.75rem;
+            margin-left: auto;
+            color: var(--muted);
+            transition: transform 0.2s ease;
+        }
+
+        .collapsible-section > summary:hover {
+            background: rgba(189, 147, 249, 0.1);
+            color: var(--text);
+        }
+
+        .collapsible-section[open] > summary::after {
+            transform: rotate(180deg);
+        }
+
+        .collapsible-section > .filter-card {
+            margin-top: 8px;
+        }
+
         .form-card {
             background: var(--panel2);
             border-radius: 10px;
@@ -237,9 +273,6 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            max-height: 350px;
-            overflow-y: auto;
-            padding-right: 4px;
         }
 
         .step-item {
@@ -463,96 +496,100 @@
             </div>
         </div>
 
-        <div class="section-title">
-            <i class="fa-solid fa-sliders"></i> Preferencje Dostępności
-        </div>
-
-        <div class="filter-card">
-            <div class="slider-box">
-                <div class="slider-header">
-                    <span>Maksymalne nachylenie</span>
-                    <span class="val" id="maxSlopeVal">6%</span>
-                </div>
-                <input type="range" id="maxSlopeSlider" min="3" max="15" value="6" step="1" aria-label="Maksymalne dopuszczalne nachylenie">
-            </div>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkStairs">
-                <span>Zezwól na schody (🪜)</span>
-            </label>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkRamps" checked>
-                <span>Preferuj rampy i podjazdy (📐)</span>
-            </label>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkElevators" checked>
-                <span>Korzystaj z wind (🛗)</span>
-            </label>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkAvoidCobble" checked>
-                <span>Unikaj kostki brukowej / żwiru (🪨)</span>
-            </label>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkSmoothCrossing" checked>
-                <span>Obniżone krawężniki (♿)</span>
-            </label>
-
-            <label class="checkbox-label">
-                <input type="checkbox" id="chkAvoidNarrow">
-                <span>Unikaj wąskich przejść &lt;90cm (📏)</span>
-            </label>
-        </div>
-
-        <div class="section-title">
-            <i class="fa-solid fa-layer-group"></i> Widok Nawierzchni Ulic w Tle
-        </div>
-
-        <div class="filter-card">
-            <label class="checkbox-label">
-                <input type="radio" name="bgLayerMode" value="surface" checked>
-                <span>Kolory nawierzchni (Asfalt / Bruk / Żwir)</span>
-            </label>
-            <label class="checkbox-label">
-                <input type="radio" name="bgLayerMode" value="grade">
-                <span>Kolory nachylenia (Płasko / Stromo)</span>
-            </label>
-            <label class="checkbox-label">
-                <input type="radio" name="bgLayerMode" value="plain">
-                <span>Jednolity kolor siatki</span>
-            </label>
-
-            <div id="surfaceLegend" style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: 0.78rem; padding-top: 6px; border-top: 1px solid var(--border);">
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 12px; height: 12px; background: #50fa7b; border-radius: 3px; display: inline-block;"></span>
-                    <span>Gładka / Asfalt / Beton</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 12px; height: 12px; background: #f1fa8c; border-radius: 3px; display: inline-block;"></span>
-                    <span>Wyboista / Utwardzona / Żwir</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 12px; height: 12px; background: #ff5555; border-radius: 3px; display: inline-block;"></span>
-                    <span>Bruk / Kocie łby / Schody</span>
-                </div>
-                <div style="display: flex; align-items: center; gap: 6px;">
-                    <span style="width: 12px; height: 12px; background: #8be9fd; border-radius: 3px; display: inline-block;"></span>
-                    <span>Nieznana nawierzchnia</span>
-                </div>
-            </div>
-
-            <label class="checkbox-label" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);">
-                <input type="checkbox" id="chkShowStairsMap" checked>
-                <span>Pokaż ikonki schodów na mapie (<i class="fa-solid fa-stairs"></i>)</span>
-            </label>
-        </div>
-
         <button id="btnCalculateRoute" class="btn-primary">
             <i class="fa-solid fa-route" aria-hidden="true"></i> Wyznacz Dostępną Trasę
         </button>
+
+        <details class="collapsible-section">
+            <summary class="section-title">
+                <i class="fa-solid fa-sliders" aria-hidden="true"></i> Preferencje Dostępności
+            </summary>
+
+            <div class="filter-card">
+                <div class="slider-box">
+                    <div class="slider-header">
+                        <span>Maksymalne nachylenie</span>
+                        <span class="val" id="maxSlopeVal">6%</span>
+                    </div>
+                    <input type="range" id="maxSlopeSlider" min="3" max="15" value="6" step="1" aria-label="Maksymalne dopuszczalne nachylenie">
+                </div>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkStairs">
+                    <span>Zezwól na schody (🪜)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkRamps" checked>
+                    <span>Preferuj rampy i podjazdy (📐)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkElevators" checked>
+                    <span>Korzystaj z wind (🛗)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkAvoidCobble" checked>
+                    <span>Unikaj kostki brukowej / żwiru (🪨)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkSmoothCrossing" checked>
+                    <span>Obniżone krawężniki (♿)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkAvoidNarrow">
+                    <span>Unikaj wąskich przejść &lt;90cm (📏)</span>
+                </label>
+            </div>
+        </details>
+
+        <details class="collapsible-section">
+            <summary class="section-title">
+                <i class="fa-solid fa-layer-group" aria-hidden="true"></i> Widok Nawierzchni Ulic w Tle
+            </summary>
+
+            <div class="filter-card">
+                <label class="checkbox-label">
+                    <input type="radio" name="bgLayerMode" value="surface" checked>
+                    <span>Kolory nawierzchni (Asfalt / Bruk / Żwir)</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="bgLayerMode" value="grade">
+                    <span>Kolory nachylenia (Płasko / Stromo)</span>
+                </label>
+                <label class="checkbox-label">
+                    <input type="radio" name="bgLayerMode" value="plain">
+                    <span>Jednolity kolor siatki</span>
+                </label>
+
+                <div id="surfaceLegend" style="display: flex; flex-direction: column; gap: 4px; margin-top: 6px; font-size: 0.78rem; padding-top: 6px; border-top: 1px solid var(--border);">
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 12px; height: 12px; background: #50fa7b; border-radius: 3px; display: inline-block;"></span>
+                        <span>Gładka / Asfalt / Beton</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 12px; height: 12px; background: #f1fa8c; border-radius: 3px; display: inline-block;"></span>
+                        <span>Wyboista / Utwardzona / Żwir</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 12px; height: 12px; background: #ff5555; border-radius: 3px; display: inline-block;"></span>
+                        <span>Bruk / Kocie łby / Schody</span>
+                    </div>
+                    <div style="display: flex; align-items: center; gap: 6px;">
+                        <span style="width: 12px; height: 12px; background: #8be9fd; border-radius: 3px; display: inline-block;"></span>
+                        <span>Nieznana nawierzchnia</span>
+                    </div>
+                </div>
+
+                <label class="checkbox-label" style="margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border);">
+                    <input type="checkbox" id="chkShowStairsMap" checked>
+                    <span>Pokaż ikonki schodów na mapie (<i class="fa-solid fa-stairs"></i>)</span>
+                </label>
+            </div>
+        </details>
 
         <div id="routeErrorAlert" class="status-badge status-difficult" role="alert" aria-live="assertive" style="display: none; width: 100%; margin: 8px 0; text-align: left; padding: 10px 12px; font-size: 0.86rem; font-weight: 600;"></div>
 
