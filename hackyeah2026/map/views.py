@@ -106,6 +106,8 @@ def route_api(request: HttpRequest) -> JsonResponse:  # noqa: C901
         in ("true", "1", "yes"),
         "avoid_narrow": str(preferences.get("avoid_narrow", data.get("avoid_narrow", "false"))).lower()
         in ("true", "1", "yes"),
+        "allow_relaxed": str(preferences.get("allow_relaxed", data.get("allow_relaxed", "true"))).lower()
+        in ("true", "1", "yes"),
         "excluded_node_ids": data.get("excluded_node_ids", []),
         "excluded_edge_ids": data.get("excluded_edge_ids", []),
         "excluded_barriers": data.get("excluded_barriers", []),

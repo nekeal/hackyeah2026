@@ -79,7 +79,7 @@ def _clean_attribute_val(val: Any) -> str | None:
 def translate_surface(surface: Any) -> str:
     cleaned_val = _clean_attribute_val(surface)
     if not cleaned_val:
-        return "Brak danych o nawierzchni"
+        return "Nieznana nawierzchnia (brak danych)"
     parts = [p.strip() for p in cleaned_val.split(" / ")]
     translated = [SURFACE_NAMES_PL.get(p.lower(), p.capitalize()) for p in parts]
     unique_translated = list(dict.fromkeys(translated))
@@ -312,6 +312,9 @@ def _find_path(graph: Any, start_node: Any, end_node: Any, options: dict[str, An
             raise nx.NetworkXNoPath("Strict path has infinite weight")
         return path_nodes, False
     except nx.NetworkXNoPath, nx.NodeNotFound:
+        if not options.get("allow_relaxed", True):
+            raise NoRouteFoundError("Nie znaleziono trasy w 100% bez barier spełniającej podane preferencje.") from None
+
         relaxed = dict(options)
         relaxed["allow_stairs"] = True
         relaxed["avoid_cobblestone"] = False
@@ -404,6 +407,9 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
         is_steps, is_high_slope, is_cobblestones, is_raised_kerb, data, grade_pct, surface_label
     )
 
+    has_missing_data = cleaned_surface is None or cleaned_kerb is None
+    data_status = "unknown" if has_missing_data else "verified"
+
     return {
         "length": length,
         "grade_pct": grade_pct,
@@ -420,6 +426,8 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
         "data": data,
         "v_coords": (v_lat, v_lon, v_elev),
         "u_coords": (u_lat, u_lon, u_elev),
+        "has_missing_data": has_missing_data,
+        "data_status": data_status,
     }
 
 
@@ -486,6 +494,8 @@ def _process_route_segments(
                 "kerb_status": info["kerb"] if info["kerb"] else "brak danych",
                 "warning": info["warning_text"],
                 "has_warning": bool(info["warning_text"]),
+                "has_missing_data": info["has_missing_data"],
+                "data_status": info["data_status"],
                 "edge_ids": [[u, v]],
                 "coords": [
                     [round(u_lon, 6), round(u_lat, 6), round(u_elev, 1)],
@@ -548,6 +558,8 @@ def _snap_start_end_coords(
                         "kerb_status": "brak danych",
                         "warning": None,
                         "has_warning": False,
+                        "has_missing_data": False,
+                        "data_status": "verified",
                         "edge_ids": [],
                         "coords": [
                             start_point,
@@ -575,6 +587,8 @@ def _snap_start_end_coords(
                         "kerb_status": "brak danych",
                         "warning": None,
                         "has_warning": False,
+                        "has_missing_data": False,
+                        "data_status": "verified",
                         "edge_ids": [],
                         "coords": [
                             [round(en_lon, 6), round(en_lat, 6), round(en_elev, 1)],
@@ -645,6 +659,16 @@ def calculate_route(
         "properties": {"total_distance_m": round(total_distance, 1), "status_code": status_code},
     }
 
+    relaxed_warning = None
+    relaxed_reasons: list[str] = []
+    if is_relaxed:
+        relaxed_warning = (
+            "Nie znaleziono trasy w 100% bez barier spełniającej Twoje preferencje. "
+            "Poniższa trasa alternatywna zawiera trudniejsze odcinki "
+            "(np. schody, większe nachylenie lub trudniejszą nawierzchnię)."
+        )
+        relaxed_reasons = ["schody", "nachylenie", "nawierzchnia"]
+
     return {
         "type": "Feature",
         "geometry": geojson_feature["geometry"],
@@ -661,6 +685,8 @@ def calculate_route(
             "accessibility_status": status_label,
             "status_code": status_code,
             "is_relaxed": is_relaxed,
+            "relaxed_warning": relaxed_warning,
+            "relaxed_reasons": relaxed_reasons,
             "start_coords": [start_lat, start_lon],
             "end_coords": [end_lat, end_lon],
             "start_node": start_node,

@@ -18,7 +18,7 @@ def test_translations():
     assert translate_surface("asphalt") == "Asfalt"
     assert translate_surface("sett") == "Bruk miejski"
     assert translate_surface("unknown_surface") == "Unknown_surface"
-    assert translate_surface(None) == "Brak danych o nawierzchni"
+    assert translate_surface(None) == "Nieznana nawierzchnia (brak danych)"
 
     assert translate_highway("footway") == "Chodnik"
     assert translate_highway("steps") == "Schody"
@@ -106,3 +106,28 @@ def test_calculate_route_stairs_avoidance():
     # Route that requires stairs when no step-free path exists
     res_stairs = calculate_route(50.05958, 19.93703, 50.05923, 19.93728, options={"allow_stairs": False})
     assert res_stairs["summary"]["is_relaxed"] is True
+    assert res_stairs["summary"]["relaxed_warning"] is not None
+
+
+@pytest.mark.django_db
+def test_calculate_route_allow_relaxed_false():
+    clear_graph_cache()
+    # Strict mode: when no strict path exists, raise NoRouteFoundError
+    with pytest.raises(NoRouteFoundError, match="100% bez barier"):
+        calculate_route(
+            50.05958,
+            19.93703,
+            50.05923,
+            19.93728,
+            options={"allow_stairs": False, "allow_relaxed": False},
+        )
+
+
+@pytest.mark.django_db
+def test_calculate_route_data_status():
+    clear_graph_cache()
+    res = calculate_route(50.0617, 19.9373, 50.0645, 19.9413)
+    for inst in res["instructions"]:
+        assert "data_status" in inst
+        assert "has_missing_data" in inst
+        assert inst["data_status"] in ("verified", "unknown", "unverified", "demo")

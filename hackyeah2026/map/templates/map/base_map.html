@@ -129,6 +129,19 @@
             bottom: 0;
         }
 
+        /* Accessibility helper */
+        .sr-only {
+            position: absolute !important;
+            width: 1px !important;
+            height: 1px !important;
+            padding: 0 !important;
+            margin: -1px !important;
+            overflow: hidden !important;
+            clip: rect(0, 0, 0, 0) !important;
+            white-space: nowrap !important;
+            border: 0 !important;
+        }
+
         @media (max-width: 768px) {
             #top-nav { padding: 0 10px; }
             .brand span { display: none; }
@@ -140,6 +153,9 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+
+    <!-- Region powiadomień dla czytników ekranu -->
+    <div id="sr-announcer" class="sr-only" aria-live="polite" aria-atomic="true"></div>
 
     <!-- Top Navigation Header -->
     <nav id="top-nav" aria-label="Główna nawigacja">
