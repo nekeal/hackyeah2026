@@ -38,7 +38,7 @@ Najważniejszy przepływ produktu wygląda następująco:
 W demonstracji część tego przepływu będzie mockowana. Dane topograficzne i
 mapowe są częściowo rzeczywiste, a część barier, takich jak schody, może być
 odczytana bezpośrednio z danych mapowych. Przygotowana trasa, zgłoszenia,
-wybrane fikcyjne utrudnienia i zachowanie routingu mogą być z góry
+wybrane fikcyjne utrudnienia i zachowanie mechanizmu wyznaczania trasy mogą być z góry
 zdefiniowane na potrzeby prezentacji. Demo ma pokazać docelowe doświadczenie i ideę
 produktu, a nie udawać gotowego systemu nawigacyjnego.
 
@@ -195,7 +195,7 @@ danych.
 
 | Obszar | Demonstracja | Produkt docelowy |
 | --- | --- | --- |
-| Routing | Przygotowana trasa i kontrolowane scenariusze | Routing dynamiczny według parametrów użytkownika |
+| Wyznaczanie trasy | Przygotowana trasa i kontrolowane scenariusze | Dynamiczne wyznaczanie trasy według parametrów użytkownika |
 | GPS | Symulacja przejścia po trasie | Pozycja i nawigacja w czasie rzeczywistym |
 | Zgłoszenia | Mockowany przepływ z natychmiastową zmianą trasy | Zgłoszenie zapisywane i dostępne dla innych użytkowników |
 | Dane | OSM/topografia oraz dane fikcyjne | OSM, dane topograficzne, otwarte dane miejskie i crowdsourcing |
@@ -280,7 +280,7 @@ obsługiwać:
 ### 8.2. Warstwy mapy
 
 Warstwy służą do oglądania informacji. Same w sobie nie muszą zmieniać
-wyniku routingu.
+wyniku wyznaczania trasy.
 
 | Warstwa | Przykładowe informacje |
 | --- | --- |
@@ -292,9 +292,9 @@ Włączona warstwa musi mieć alternatywę tekstową. Użytkownik powinien móc
 otrzymać tę samą informację z listy lub panelu, bez konieczności odczytywania
 jej wyłącznie z mapy.
 
-### 8.3. Parametry routingu
+### 8.3. Parametry wyznaczania trasy
 
-Parametry routingu wpływają na wybór trasy. Początkowe wartości domyślne,
+Parametry wyznaczania trasy wpływają na wybór trasy. Początkowe wartości domyślne,
 przejęte z ustaleń projektu, są następujące:
 
 | Parametr | Domyślne ustawienie |
@@ -399,7 +399,7 @@ mechanizm rankingu nie jest obecnie planowanym elementem produktu.
 
 ### 9.4. Zasada brakujących danych
 
-Domyślnie algorytm powinien wykluczać z routingu nieznane lub
+Domyślnie algorytm powinien wykluczać z wyznaczania trasy nieznane lub
 niewystarczająco opisane odcinki. Jeżeli przez to nie da się znaleźć trasy
 spełniającej parametry użytkownika, system powinien zakomunikować brak takiej
 trasy i wyjaśnić, że przyczyną są ograniczenia danych lub wymagania trasy.
@@ -438,7 +438,7 @@ Pozyskiwanie i przetwarzanie danych powinno być oddzielone od frontendowej
 prezentacji. Pipeline może przygotować graf, warstwy i metadane, natomiast
 interfejs powinien otrzymywać stabilny model trasy i informacji o źródłach.
 
-### 11.2. Routing demonstracyjny
+### 11.2. Wyznaczanie trasy w demonstracji
 
 Pierwsza wersja demonstracyjna korzysta z jednej lub kilku przygotowanych
 tras wyliczonych wcześniej na podstawie lokalnych danych OSM. Fixture trasy
@@ -452,7 +452,7 @@ powinien zawierać co najmniej:
 - znane nawierzchnie, nachylenia i bariery;
 - źródło danych, datę snapshotu i status wiarygodności.
 
-Dynamiczny routing jest kolejnym etapem. Docelowo powinien uwzględniać
+Dynamiczne wyznaczanie tras jest kolejnym etapem. Docelowo powinno uwzględniać
 parametry użytkownika, nieznane dane, bariery czasowe i możliwość wyjaśnienia,
 dlaczego wybrana trasa jest dłuższa lub omija konkretny element.
 
@@ -509,7 +509,7 @@ Poza hackathonem warto mierzyć między innymi:
 | --- | --- | --- |
 | Nieaktualne dane OSM | Trasa może nie odpowiadać rzeczywistości | Pokazywać datę, źródło i status; umożliwić korekty |
 | Brak danych oznaczony jak dostępność | Użytkownik może podjąć niebezpieczną decyzję | Jawny status „nieznane” i domyślne omijanie |
-| Nadmiernie ambitny routing | Ryzyko niedziałającego demo | Deterministyczne fixture'y i scenariusze |
+| Nadmiernie ambitne wyznaczanie tras | Ryzyko niedziałającego demo | Deterministyczne fixture'y i scenariusze |
 | Różne potrzeby osób na wózkach | Jeden profil nie pasuje do wszystkich | Parametry akceptowanych barier zamiast jednej etykiety |
 | Zgłoszenia niskiej jakości | Błędne objazdy i spadek zaufania | Status „do potwierdzenia”, później moderacja i potwierdzanie |
 | Uzależnienie od mapy | Informacja może być niedostępna dla części użytkowników | Tekstowa alternatywa, klawiatura i czytniki ekranu |
@@ -523,7 +523,7 @@ Poza hackathonem warto mierzyć między innymi:
 - przygotowana trasa z prawdziwym podkładem lub danymi mapowymi;
 - mockowane bariery i zgłoszenia;
 - warstwy mapy;
-- parametry routingu i ich wizualna obsługa;
+- parametry wyznaczania trasy i ich wizualna obsługa;
 - lista szczegółów trasy;
 - symulowana nawigacja;
 - przepływ zgłoszenia i objazdu;
@@ -533,9 +533,9 @@ Poza hackathonem warto mierzyć między innymi:
 ### Etap 2: działający prototyp
 
 - dynamiczne wyznaczanie trasy na lokalnym grafie;
-- stabilny model odcinka i wyjaśnienia decyzji routingu;
+- stabilny model odcinka i wyjaśnienia decyzji mechanizmu wyznaczania trasy;
 - reguły obsługi danych nieznanych i konfliktów źródeł;
-- testy użyteczności mapy, prezentacji trasy i ustawień routingu z osobami
+- testy użyteczności mapy, prezentacji trasy i ustawień wyznaczania trasy z osobami
   z grupy docelowej;
 - pełniejsze pokrycie Krakowa.
 
