@@ -16,7 +16,7 @@ Informacja o nawierzchni jest **krytyczna** dla wózków inwalidzkich, ponieważ
 
 ## Wyniki ze skanowania woj. małopolskiego (Częstotliwość występowania)
 
-Na podstawie szybkiego skanowania pliku PBF wydobyliśmy ponad 200 tysięcy przypisań tagu `surface`. Poniżej zostały one pogrupowane w kategorie pod kątem algorytmu wyznaczania bezpiecznych tras dla wózków (routingu).
+Na podstawie szybkiego skanowania pliku PBF wydobyliśmy ponad 200 tysięcy przypisań tagu `surface`. Poniżej zostały one pogrupowane w kategorie pod kątem algorytmu wyznaczania bezpiecznych tras dla wózków.
 
 ### 🟢 Dobre i utwardzone (Niskie koszty w algorytmie)
 Nawierzchnie gładkie, po których wózek inwalidzki porusza się bez oporów.
@@ -53,6 +53,6 @@ muszą posłużyć jako klasyfikacja i modyfikatory wagi:
 - Mnożnik `1.0` dla nawierzchni z grupy zielonej.
 - `sett` z `smoothness=good` lub `excellent` należy do grupy zielonej.
 - `sett` z `smoothness=intermediate` lub gorszym należy do grupy czerwonej.
-- Każda nawierzchnia bez `smoothness` należy do grupy nieznanej i jest wykluczana domyślnie.
+- `sett` bez `smoothness` należy do grupy ostrożnej/umiarkowanej: typ materiału jest znany, ale stan wymaga potwierdzenia. Nie jest blokowany przez filtr piasku, żwiru i miękkiego podłoża. Brak wartości `surface` pozostaje grupą nieznaną i jest wykluczany domyślnie.
 - Mnożnik `∞` (Infinity / zakaz wjazdu) stosujemy dla grup czerwonej i
   nieznanej, chyba że użytkownik jawnie włączy odpowiedni parametr.

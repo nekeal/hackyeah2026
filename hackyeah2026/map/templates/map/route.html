@@ -233,6 +233,7 @@
         .status-accessible { background: rgba(80, 250, 123, 0.15); color: var(--green); border: 1px solid var(--green); }
         .status-moderate   { background: rgba(241, 250, 140, 0.15); color: var(--yellow); border: 1px solid var(--yellow); }
         .status-difficult  { background: rgba(255, 85, 85, 0.15); color: var(--red); border: 1px solid var(--red); }
+        .status-unknown    { background: rgba(139, 233, 253, 0.15); color: var(--blue); border: 1px solid var(--blue); }
 
         .metrics-grid {
             display: grid;
@@ -531,7 +532,17 @@
 
                 <label class="checkbox-label">
                     <input type="checkbox" id="chkAvoidCobble" checked>
-                    <span>Unikaj kostki brukowej / żwiru (🪨)</span>
+                    <span>Unikaj nierównego bruku / kocich łbów (🪨)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkAvoidDifficultSurface" checked>
+                    <span>Unikaj żwiru, piasku i miękkiego podłoża (⚠️)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkAllowUnknownSurface">
+                    <span>Zezwól na odcinki z nieznaną nawierzchnią (❓)</span>
                 </label>
 
                 <label class="checkbox-label">
@@ -542,6 +553,11 @@
                 <label class="checkbox-label">
                     <input type="checkbox" id="chkAvoidNarrow">
                     <span>Unikaj wąskich przejść &lt;90cm (📏)</span>
+                </label>
+
+                <label class="checkbox-label">
+                    <input type="checkbox" id="chkAllowRelaxed" checked>
+                    <span>Pokaż trasę alternatywną z ostrzeżeniami (⚠️)</span>
                 </label>
             </div>
         </details>
@@ -572,11 +588,11 @@
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="width: 12px; height: 12px; background: #f1fa8c; border-radius: 3px; display: inline-block;"></span>
-                        <span>Wyboista / Utwardzona / Żwir</span>
+                         <span>Umiarkowana / Żwir / Nawierzchnia trudna</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="width: 12px; height: 12px; background: #ff5555; border-radius: 3px; display: inline-block;"></span>
-                        <span>Bruk / Kocie łby / Schody</span>
+                         <span>Nierówny bruk / Kocie łby / Schody</span>
                     </div>
                     <div style="display: flex; align-items: center; gap: 6px;">
                         <span style="width: 12px; height: 12px; background: #8be9fd; border-radius: 3px; display: inline-block;"></span>
@@ -670,7 +686,7 @@
 
         // Surface classification constants
         const surfacesGood = ['asphalt', 'paving_stones', 'paved', 'concrete', 'compacted', 'concrete:plates'];
-        const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'sett', 'fine_gravel', 'grass_paver'];
+        const surfacesMedium = ['ground', 'unpaved', 'gravel', 'grass', 'dirt', 'earth', 'fine_gravel', 'grass_paver'];
         const surfacesBad = ['pebblestone', 'sand', 'mud', 'cobblestone', 'unhewn_cobblestone', 'metal_grid', 'stepping_stones'];
 
         function getSurfaceCategory(props) {
@@ -678,11 +694,15 @@
             const hw = String(props.highway || '').toLowerCase();
             if (hw === 'steps') return 'bad';
 
-            const sm = String(props.smoothness || '').toLowerCase();
-            if (['bad', 'very_bad', 'horrible', 'very_horrible', 'impassable'].includes(sm)) return 'bad';
-
             let surface = String(props.surface || '').toLowerCase();
             if (!surface || surface === "nan" || surface === "none") return "unknown";
+            const sm = String(props.smoothness || '').toLowerCase();
+            if (['intermediate', 'bad', 'very_bad', 'horrible', 'very_horrible', 'impassable'].includes(sm)) return 'bad';
+            if (surface === 'sett') {
+                if (['good', 'excellent'].includes(sm)) return 'good';
+                if (['intermediate', 'bad', 'very_bad', 'horrible', 'very_horrible', 'impassable'].includes(sm)) return 'bad';
+                return 'medium';
+            }
             if (surfacesGood.includes(surface)) return "good";
             if (surfacesMedium.includes(surface)) return "medium";
             if (surfacesBad.includes(surface)) return "bad";
@@ -729,18 +749,7 @@
 
             // Setup map click handlers
             map.on('click', (e) => {
-                const lat = e.latlng.lat.toFixed(5);
-                const lng = e.latlng.lng.toFixed(5);
-
-                if (activePointSelect === 'start') {
-                    setStartPoint(lat, lng);
-                    activePointSelect = null;
-                    document.body.style.cursor = 'default';
-                } else if (activePointSelect === 'end') {
-                    setEndPoint(lat, lng);
-                    activePointSelect = null;
-                    document.body.style.cursor = 'default';
-                }
+                selectActivePoint(e.latlng);
             });
 
             // UI Listeners
@@ -773,6 +782,25 @@
             }
         }
 
+        function selectActivePoint(latlng) {
+            if (!activePointSelect) return false;
+
+            const lat = latlng.lat.toFixed(5);
+            const lng = latlng.lng.toFixed(5);
+            if (activePointSelect === 'start') {
+                setStartPoint(lat, lng);
+            } else {
+                setEndPoint(lat, lng);
+            }
+
+            activePointSelect = null;
+            document.body.style.cursor = 'default';
+            map.closePopup();
+            // Leaflet's popup listener runs after the road click listener.
+            setTimeout(() => map.closePopup(), 0);
+            return true;
+        }
+
         function fetchRoadsNetwork() {
             fetch('{% url "map:roads_geojson" %}')
                 .then(res => res.json())
@@ -782,6 +810,44 @@
                     renderStairsMarkers();
                 })
                 .catch(err => console.error("Błąd podczas pobierania siatki ulic:", err));
+        }
+
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, character => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            })[character]);
+        }
+
+        function roadPopupContent(props) {
+            const category = getSurfaceCategory(props);
+            const categoryLabels = {
+                good: 'gładka / przejezdna',
+                medium: 'umiarkowana',
+                bad: 'trudna',
+                unknown: 'nieznana'
+            };
+            const slope = props.max_slope_pct ?? props.grade_abs ?? props.grade;
+            const slopeValue = parseFloat(slope);
+            const slopePercent = props.max_slope_pct !== undefined && props.max_slope_pct !== null
+                ? slopeValue
+                : slopeValue * 100;
+            const slopeText = slope === undefined || slope === null || slope === '' || Number.isNaN(slopePercent)
+                ? 'brak danych'
+                : `${slopePercent.toFixed(1)}%`;
+
+            return `
+                <div class="road-details-popup">
+                    <strong>${escapeHtml(props.name || props.highway || 'Odcinek drogi')}</strong><br>
+                    <b>Kategoria:</b> ${categoryLabels[category]}<br>
+                    <b>Nawierzchnia OSM:</b> ${escapeHtml(props.surface || 'brak danych')}<br>
+                    <b>Stan nawierzchni:</b> ${escapeHtml(props.smoothness || 'brak danych')}<br>
+                    <b>Nachylenie:</b> ${escapeHtml(slopeText)}<br>
+                    <b>Typ drogi:</b> ${escapeHtml(props.highway || 'brak danych')}
+                </div>`;
         }
 
         function renderStairsMarkers() {
@@ -838,6 +904,14 @@
                     }
 
                     return { color: color, weight: weight, opacity: opacity };
+                },
+                onEachFeature: (feature, layer) => {
+                    layer.on('click', event => {
+                        if (selectActivePoint(event.latlng)) {
+                            L.DomEvent.stop(event);
+                        }
+                    });
+                    layer.bindPopup(roadPopupContent(feature.properties || {}));
                 }
             }).addTo(map);
 
@@ -938,6 +1012,22 @@
             }
         }
 
+        function clearRouteResult() {
+            if (routePolyline) {
+                map.removeLayer(routePolyline);
+                routePolyline = null;
+            }
+
+            const summaryContainer = document.getElementById('summaryContainer');
+            const instructionsWrapper = document.getElementById('instructionsWrapper');
+            if (summaryContainer) summaryContainer.style.display = 'none';
+            if (instructionsWrapper) instructionsWrapper.style.display = 'none';
+            const instructionsList = document.getElementById('instructionsList');
+            if (instructionsList) instructionsList.innerHTML = '';
+            const stepsCount = document.getElementById('stepsCount');
+            if (stepsCount) stepsCount.textContent = '0';
+        }
+
         function resetDetours(evt) {
             if (evt) evt.stopPropagation();
             excludedEdgeIds = [];
@@ -951,6 +1041,7 @@
             const end = parseCoords(document.getElementById('inputEnd').value);
 
             if (!start || !end) {
+                clearRouteResult();
                 showRouteError('Podaj poprawne współrzędne dla Punktu A i B (format: lat, lon)');
                 return;
             }
@@ -962,11 +1053,13 @@
                 allow_stairs: document.getElementById('chkStairs').checked,
                 prefer_ramps: document.getElementById('chkRamps').checked,
                 use_elevators: document.getElementById('chkElevators').checked,
-                avoid_cobble: document.getElementById('chkAvoidCobble').checked,
+                avoid_rough_stone: document.getElementById('chkAvoidCobble').checked,
+                avoid_difficult_surfaces: document.getElementById('chkAvoidDifficultSurface').checked,
+                allow_unknown_surfaces: document.getElementById('chkAllowUnknownSurface').checked,
                 smooth_crossing: document.getElementById('chkSmoothCrossing').checked,
                 avoid_narrow: document.getElementById('chkAvoidNarrow').checked,
-                allow_relaxed: true,
-                excluded_edge_ids: excludedEdgeIds
+                allow_relaxed: document.getElementById('chkAllowRelaxed').checked,
+                 excluded_edge_ids: excludedEdgeIds
             };
 
             // Show loader
@@ -982,6 +1075,7 @@
                 document.getElementById('loader').style.display = 'none';
 
                 if (data.error || data.status === 'error') {
+                    clearRouteResult();
                     showRouteError('Błąd wyznaczania trasy: ' + (data.error || data.message));
                     return;
                 }
@@ -990,6 +1084,7 @@
             })
             .catch(err => {
                 document.getElementById('loader').style.display = 'none';
+                clearRouteResult();
                 showRouteError('Błąd połączenia z serwerem: ' + err);
             });
         }
@@ -1045,7 +1140,8 @@
             const badge = document.getElementById('statusBadge');
             badge.textContent = summary.accessibility_status;
             badge.className = 'status-badge ';
-            if (summary.accessibility_status.includes('Pełna')) badge.classList.add('status-accessible');
+            if (summary.status_code === 'unknown') badge.classList.add('status-unknown');
+            else if (summary.accessibility_status.includes('Pełna')) badge.classList.add('status-accessible');
             else if (summary.accessibility_status.includes('Dostępna')) badge.classList.add('status-moderate');
             else badge.classList.add('status-difficult');
 
@@ -1074,7 +1170,10 @@
             
             const b = summary.barrier_counts || summary.barriers_summary || {};
             if (b.stairs > 0) chipsContainer.innerHTML += `<div class="chip">🪜 Schody: ${b.stairs}</div>`;
-            if (b.cobble > 0) chipsContainer.innerHTML += `<div class="chip">🪨 Bruk/Kostka: ${b.cobble}</div>`;
+            if (b.rough_stone > 0) chipsContainer.innerHTML += `<div class="chip">🪨 Nierówny bruk: ${b.rough_stone}</div>`;
+            if (b.difficult_surface > 0) chipsContainer.innerHTML += `<div class="chip">⚠️ Trudna nawierzchnia: ${b.difficult_surface}</div>`;
+            if (b.moderate_surface > 0) chipsContainer.innerHTML += `<div class="chip">ℹ️ Stan bruku niepotwierdzony: ${b.moderate_surface}</div>`;
+            if (b.unknown_surface > 0) chipsContainer.innerHTML += `<div class="chip">❓ Nieznana nawierzchnia: ${b.unknown_surface}</div>`;
             if (b.high_slope > 0) chipsContainer.innerHTML += `<div class="chip">📈 Duże nachylenie: ${b.high_slope}</div>`;
             if (b.narrow > 0) chipsContainer.innerHTML += `<div class="chip">📏 Wąskie przejście: ${b.narrow}</div>`;
 
@@ -1087,7 +1186,16 @@
                 `;
             }
 
-            if (!b.stairs && !b.cobble && !b.high_slope && !b.narrow && excludedEdgeIds.length === 0) {
+            if (
+                !b.stairs &&
+                !b.rough_stone &&
+                !b.difficult_surface &&
+                !b.moderate_surface &&
+                !b.unknown_surface &&
+                !b.high_slope &&
+                !b.narrow &&
+                excludedEdgeIds.length === 0
+            ) {
                 chipsContainer.innerHTML = `<div class="chip" style="color: var(--green); border-color: var(--green);">✅ Brak barier architektonicznych</div>`;
             }
 

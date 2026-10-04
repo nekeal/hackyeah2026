@@ -90,6 +90,13 @@ import requests
 from pyrosm import OSM
 from pyrosm.pbf_export import crop_pbf
 
+from hackyeah2026.map.surfaces import (
+    SURFACE_OTHER_DIFFICULT,
+    SURFACE_ROUGH_STONE,
+    SURFACE_UNKNOWN,
+    classify_surface,
+)
+
 original_init = gpd.GeoDataFrame.__init__
 
 
@@ -109,7 +116,7 @@ gpd.GeoDataFrame.__init__ = patched_init
 # =============================================================================
 
 # Ustaw na True, aby testować tylko mały wycinek (np. Rynek Główny) -> błyskawiczny feedback!
-FAST_MODE = True # keep always true
+FAST_MODE = True  # keep always true
 
 # Topologiczne upraszczenie siatki: 600k -> 214k węzłów, identyczna geometria
 # i identyczne odległości, ale 3x szybszy zapis i routing. Węzły pośrednie nie
@@ -128,6 +135,7 @@ EDGE_EXTRA_ATTRIBUTES = [
     # Nawierzchnia (kluczowe dla wózków — patrz surface_types_analysis.md)
     "surface",
     "smoothness",
+    "surface_category",
     # Dostępność ogólna krawędzi
     "wheelchair",
     "incline",
@@ -561,7 +569,7 @@ def as_int(value: object) -> int:
     """Znaczniki OSM bywają '12', 12.0 albo NaN — wszystkie traktujemy jak liczbę."""
     try:
         return int(float(value))  # type: ignore[arg-type]
-    except (TypeError, ValueError):
+    except TypeError, ValueError:
         return 0
 
 
@@ -571,33 +579,17 @@ def add_accessibility_costs(graph: nx.MultiDiGraph) -> None:
     for _, _, _, data in graph.edges(keys=True, data=True):
         penalty = 1.0
 
-        # 1. Nawierzchnia (surface) — wg surface_types_analysis.md
-        surface = str(data.get("surface", "")).lower()
-        # Ekstremalne przeszkody (mnożnik bardzo wysoki)
-        if surface in ["sand", "mud"]:
-            penalty *= 5.0  # Niemal nieprzejezdne, wózek grzęźnie
-        elif surface in ["pebblestone", "stepping_stones", "metal_grid"]:
-            penalty *= 4.0  # Wysokie ryzyko utknięcia / upadku
-        elif surface in ["cobblestone", "unhewn_cobblestone"]:
-            penalty *= 3.0  # Kocie łby — ból i ryzyko wywrócenia
-        # Wyboiste i trudne
-        elif surface in ["sett", "gravel", "grass_paver"]:
-            penalty *= 2.5  # Duże opory toczenia
-        elif surface in ["dirt", "earth", "ground", "unpaved", "fine_gravel"]:
-            penalty *= 2.0  # Zależy od pogody, trudne przy wilgoci
-        elif surface in ["grass"]:
-            penalty *= 2.0  # Miękkie, trudne dla małych kółek
-        # Dobre (brak kary): asphalt, paving_stones, paved, concrete, compacted
+        # 1. Nawierzchnia (surface + smoothness) — wspólna klasyfikacja routingu
+        smoothness = data.get("smoothness")
+        surface_category = classify_surface(data.get("surface"), smoothness)
+        data["surface_category"] = surface_category
 
-        # 2. Gładkość (smoothness) — doprecyzowanie ponad surface
-        smoothness = str(data.get("smoothness", "")).lower()
-        if smoothness in ["horrible", "very_bad"]:
-            penalty *= 3.0
-        elif smoothness in ["bad"]:
-            penalty *= 2.0
-        elif smoothness in ["intermediate"]:
-            penalty *= 1.5
-        # excellent, good -> brak kary
+        if surface_category == SURFACE_UNKNOWN:
+            penalty *= 100.0  # Brak danych nie oznacza dostępności.
+        elif surface_category == SURFACE_ROUGH_STONE:
+            penalty *= 3.0  # Nierówny bruk / kocie łby.
+        elif surface_category == SURFACE_OTHER_DIFFICULT:
+            penalty *= 4.0  # Piasek, żwir, błoto i inne trudne podłoża.
 
         # 3. Schody (highway=steps)
         if str(data.get("highway", "")).lower() == "steps":
@@ -641,6 +633,7 @@ def _clean_val(v: object) -> str | None:
         if s.startswith("[") and s.endswith("]"):
             try:
                 import ast
+
                 s_fix = s.replace("nan", "None").replace("NaN", "None")
                 parsed = ast.literal_eval(s_fix)
                 if isinstance(parsed, (list, tuple, set)):
@@ -706,9 +699,7 @@ def write_provenance(source: Path, cropped: Path, bbox: list[float], graph: nx.M
             "dataset": "OpenStreetMap",
             "provider": "Geofabrik",
             "file": source.name,
-            "downloaded_at": time.strftime(
-                "%Y-%m-%dT%H:%M:%S%z", time.localtime(source.stat().st_mtime)
-            ),
+            "downloaded_at": time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(source.stat().st_mtime)),
             "extract_file": cropped.name,
         },
         "area": {

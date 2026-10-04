@@ -4,6 +4,13 @@ from typing import Any
 import networkx as nx  # type: ignore[import-untyped]
 
 from .selectors import find_nearest_node, get_node_coordinates, get_routing_graph
+from .surfaces import (
+    SURFACE_MODERATE,
+    SURFACE_OTHER_DIFFICULT,
+    SURFACE_ROUGH_STONE,
+    SURFACE_UNKNOWN,
+    classify_surface,
+)
 
 
 class NoRouteFoundError(Exception):
@@ -158,37 +165,24 @@ def _calc_slope_penalty(
 
 def _calc_surface_penalty(
     surface_raw: Any,
+    smoothness_raw: Any,
     avoid_cobblestone: bool,
+    avoid_difficult_surfaces: bool,
+    allow_unknown_surfaces: bool,
     excluded_barriers: set[str],
 ) -> float:
-    cobblestone_surfaces = {
-        "cobblestone",
-        "unhewn_cobblestone",
-        "sett",
-        "gravel",
-        "sand",
-        "pebblestone",
-        "grass_paver",
-        "dirt",
-        "mud",
-    }
+    classification = classify_surface(surface_raw, smoothness_raw)
 
-    surfaces: list[str] = []
-    if isinstance(surface_raw, (list, tuple, set)):
-        surfaces = [str(s).lower() for s in surface_raw]
-    elif surface_raw:
-        surfaces = [
-            s.strip().lower() for s in str(surface_raw).replace("[", "").replace("]", "").replace("'", "").split(",")
-        ]
+    if classification == SURFACE_UNKNOWN:
+        return 1.0 if allow_unknown_surfaces else math.inf
 
-    is_cobble = any(s in cobblestone_surfaces for s in surfaces)
-    if not is_cobble:
-        return 1.0
+    if classification == SURFACE_ROUGH_STONE and (
+        "rough_stone" in excluded_barriers or "cobblestone" in excluded_barriers or avoid_cobblestone
+    ):
+        return math.inf
 
-    if "cobblestone" in excluded_barriers or avoid_cobblestone:
-        if any(s in ("sand", "mud") for s in surfaces):
-            return math.inf
-        return 15.0
+    if classification == SURFACE_OTHER_DIFFICULT and avoid_difficult_surfaces:
+        return math.inf
 
     return 1.0
 
@@ -216,6 +210,8 @@ def _build_weight_function(options: dict[str, Any]):
     allow_ramps = bool(options.get("allow_ramps", True))
     allow_elevators = bool(options.get("allow_elevators", True))
     avoid_cobblestone = bool(options.get("avoid_cobblestone", True))
+    avoid_difficult_surfaces = bool(options.get("avoid_difficult_surfaces", True))
+    allow_unknown_surfaces = bool(options.get("allow_unknown_surfaces", False))
     avoid_narrow = bool(options.get("avoid_narrow", False))
 
     excluded_node_ids = set(options.get("excluded_node_ids", []))
@@ -257,7 +253,14 @@ def _build_weight_function(options: dict[str, Any]):
             if math.isinf(slope_p):
                 continue
 
-            surf_p = _calc_surface_penalty(data.get("surface"), avoid_cobblestone, excluded_barriers)
+            surf_p = _calc_surface_penalty(
+                data.get("surface"),
+                data.get("smoothness"),
+                avoid_cobblestone,
+                avoid_difficult_surfaces,
+                allow_unknown_surfaces,
+                excluded_barriers,
+            )
             if math.isinf(surf_p):
                 continue
 
@@ -312,14 +315,12 @@ def _find_path(graph: Any, start_node: Any, end_node: Any, options: dict[str, An
             raise nx.NetworkXNoPath("Strict path has infinite weight")
         return path_nodes, False
     except nx.NetworkXNoPath, nx.NodeNotFound:
-        if not options.get("allow_relaxed", True):
+        if not options.get("allow_relaxed", False):
             raise NoRouteFoundError("Nie znaleziono trasy w 100% bez barier spełniającej podane preferencje.") from None
 
         relaxed = dict(options)
         relaxed["allow_stairs"] = True
-        relaxed["avoid_cobblestone"] = False
         relaxed["max_slope"] = max(float(options.get("max_slope", 6.0)), 12.0)
-        relaxed["excluded_barriers"] = []
         relaxed_weight_fn = _build_weight_function(relaxed)
 
         try:
@@ -337,6 +338,9 @@ def _build_step_warning(
     is_steps: bool,
     is_high_slope: bool,
     is_cobblestones: bool,
+    is_other_difficult_surface: bool,
+    is_moderate_surface: bool,
+    is_unknown_surface: bool,
     is_raised_kerb: bool,
     data: dict,
     grade_pct: float,
@@ -351,6 +355,12 @@ def _build_step_warning(
         warnings.append(f"Stromy podjazd ({round(grade_pct, 1)}%)")
     if is_cobblestones:
         warnings.append(f"Trudna nawierzchnia ({surface_label})")
+    elif is_other_difficult_surface:
+        warnings.append(f"Trudna nawierzchnia ({surface_label})")
+    elif is_moderate_surface:
+        warnings.append(f"Stan nawierzchni niepotwierdzony ({surface_label})")
+    elif is_unknown_surface:
+        warnings.append("Nieznana nawierzchnia")
     if is_raised_kerb:
         warnings.append("Wysoki krawężnik")
 
@@ -383,32 +393,42 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
 
     raw_highway = data.get("highway")
     raw_surface = data.get("surface")
+    raw_smoothness = data.get("smoothness")
     raw_name = data.get("name")
     raw_kerb = data.get("kerb")
 
     cleaned_name = _clean_attribute_val(raw_name)
-    cleaned_surface = _clean_attribute_val(raw_surface)
     cleaned_highway = _clean_attribute_val(raw_highway)
     cleaned_kerb = _clean_attribute_val(raw_kerb)
 
     is_steps = "steps" in (cleaned_highway.lower() if cleaned_highway else "")
     is_high_slope = grade_pct > max_slope_limit
 
-    cobble_types = {"cobblestone", "unhewn_cobblestone", "sett", "gravel", "sand", "pebblestone"}
-    is_cobblestones = False
-    if cleaned_surface:
-        is_cobblestones = any(s.strip().lower() in cobble_types for s in cleaned_surface.split("/"))
+    surface_category = classify_surface(raw_surface, raw_smoothness)
+    is_cobblestones = surface_category == SURFACE_ROUGH_STONE
+    is_other_difficult_surface = surface_category == SURFACE_OTHER_DIFFICULT
+    is_moderate_surface = surface_category == SURFACE_MODERATE
+    is_unknown_surface = surface_category == SURFACE_UNKNOWN
 
     is_raised_kerb = "raised" in (cleaned_kerb.lower() if cleaned_kerb else "")
 
     street_label = cleaned_name if cleaned_name else translate_highway(raw_highway)
     surface_label = translate_surface(raw_surface)
     warning_text = _build_step_warning(
-        is_steps, is_high_slope, is_cobblestones, is_raised_kerb, data, grade_pct, surface_label
+        is_steps,
+        is_high_slope,
+        is_cobblestones,
+        is_other_difficult_surface,
+        is_moderate_surface,
+        is_unknown_surface,
+        is_raised_kerb,
+        data,
+        grade_pct,
+        surface_label,
     )
 
-    has_missing_data = cleaned_surface is None
-    data_status = "unknown" if has_missing_data else "verified"
+    has_missing_data = is_unknown_surface or is_moderate_surface
+    data_status = "unknown" if is_unknown_surface else ("unverified" if is_moderate_surface else "verified")
 
     return {
         "length": length,
@@ -419,6 +439,10 @@ def _analyze_item(item: dict[str, Any], max_slope_limit: float) -> dict[str, Any
         "is_steps": is_steps,
         "is_high_slope": is_high_slope,
         "is_cobblestones": is_cobblestones,
+        "is_other_difficult_surface": is_other_difficult_surface,
+        "is_moderate_surface": is_moderate_surface,
+        "is_unknown_surface": is_unknown_surface,
+        "surface_category": surface_category,
         "is_raised_kerb": is_raised_kerb,
         "u_elev": u_elev,
         "v_elev": v_elev,
@@ -451,7 +475,16 @@ def _process_route_segments(
     max_slope_in_route = 0.0
     total_slope_sum = 0.0
 
-    counts = {"stairs": 0, "high_slope": 0, "cobblestone": 0, "raised_kerbs": 0}
+    counts = {
+        "stairs": 0,
+        "high_slope": 0,
+        "cobblestone": 0,
+        "rough_stone": 0,
+        "difficult_surface": 0,
+        "moderate_surface": 0,
+        "unknown_surface": 0,
+        "raised_kerbs": 0,
+    }
 
     for item in edges_data:
         u, v = item["u"], item["v"]
@@ -468,6 +501,10 @@ def _process_route_segments(
         counts["stairs"] += int(info["is_steps"])
         counts["high_slope"] += int(info["is_high_slope"])
         counts["cobblestone"] += int(info["is_cobblestones"])
+        counts["rough_stone"] += int(info["is_cobblestones"])
+        counts["difficult_surface"] += int(info["is_other_difficult_surface"])
+        counts["moderate_surface"] += int(info["is_moderate_surface"])
+        counts["unknown_surface"] += int(info["is_unknown_surface"])
         counts["raised_kerbs"] += int(info["is_raised_kerb"])
 
         v_lat, v_lon, v_elev = info["v_coords"]
@@ -644,10 +681,17 @@ def calculate_route(
 
     _format_instructions(instructions)
 
-    if counts["stairs"] == 0 and counts["high_slope"] == 0 and counts["cobblestone"] == 0:
+    if counts["unknown_surface"] > 0:
+        status_label, status_code = "Nieznana dostępność (nieznana nawierzchnia)", "unknown"
+    elif (
+        counts["stairs"] == 0
+        and counts["high_slope"] == 0
+        and counts["cobblestone"] == 0
+        and counts["moderate_surface"] == 0
+    ):
         status_label, status_code = "Pełna dostępność (trasa bez barier)", "accessible"
     elif counts["stairs"] == 0 and counts["high_slope"] <= 2:
-        status_label, status_code = "Dostępna (odcinki o umiarkowanym nachyleniu)", "moderate"
+        status_label, status_code = "Dostępna (odcinki o umiarkowanym nachyleniu lub nawierzchni)", "moderate"
     else:
         status_label, status_code = "Utrudniona (wymaga asysty lub pokonania barier)", "difficult"
 

@@ -100,13 +100,29 @@ def route_api(request: HttpRequest) -> JsonResponse:  # noqa: C901
         in ("true", "1", "yes"),
         "allow_elevators": str(preferences.get("allow_elevators", data.get("allow_elevators", "true"))).lower()
         in ("true", "1", "yes"),
-        "avoid_cobblestone": str(preferences.get("avoid_cobblestone", data.get("avoid_cobblestone", "true"))).lower()
+        "avoid_cobblestone": str(
+            preferences.get(
+                "avoid_rough_stone",
+                preferences.get(
+                    "avoid_cobblestone",
+                    data.get("avoid_rough_stone", data.get("avoid_cobblestone", "true")),
+                ),
+            )
+        ).lower()
+        in ("true", "1", "yes"),
+        "avoid_difficult_surfaces": str(
+            preferences.get("avoid_difficult_surfaces", data.get("avoid_difficult_surfaces", "true"))
+        ).lower()
+        in ("true", "1", "yes"),
+        "allow_unknown_surfaces": str(
+            preferences.get("allow_unknown_surfaces", data.get("allow_unknown_surfaces", "false"))
+        ).lower()
         in ("true", "1", "yes"),
         "smooth_crossing": str(preferences.get("smooth_crossing", data.get("smooth_crossing", "true"))).lower()
         in ("true", "1", "yes"),
         "avoid_narrow": str(preferences.get("avoid_narrow", data.get("avoid_narrow", "false"))).lower()
         in ("true", "1", "yes"),
-        "allow_relaxed": str(preferences.get("allow_relaxed", data.get("allow_relaxed", "true"))).lower()
+        "allow_relaxed": str(preferences.get("allow_relaxed", data.get("allow_relaxed", "false"))).lower()
         in ("true", "1", "yes"),
         "excluded_node_ids": data.get("excluded_node_ids", []),
         "excluded_edge_ids": data.get("excluded_edge_ids", []),

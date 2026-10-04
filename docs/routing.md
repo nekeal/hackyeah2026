@@ -112,16 +112,29 @@ walidacji z użytkownikami. Nie opisują medycznych możliwości osoby.
 | Gładka kostka / płyty (`paving_stones`, `sett` + `smoothness=good/excellent`) | Akceptuj |
 | Nierówny bruk / kocie łby | Nie akceptuj |
 | Piasek, żwir i miękkie podłoże | Nie akceptuj |
-| Nieznana lub niejednoznaczna nawierzchnia | Nie akceptuj domyślnie; osobny opt-in |
+| `sett` bez opisu gładkości | Ostrożna/umiarkowana; nie blokuj automatycznie |
+| Brak typu `surface` | Nie akceptuj domyślnie; osobny opt-in |
 
 W demo parametry muszą mieć widoczny wpływ na opis trasy. Jeżeli interfejs
 pokazuje zmianę ustawienia, powinien pokazać również, które odcinki zostały
 zaakceptowane, odrzucone albo oznaczone jako nieznane.
 
-Każda nawierzchnia bez wartości `smoothness` jest traktowana jako nieznana,
-a nie jako dostępna. Użytkownik może jawnie włączyć parametr
+Znane typy nawierzchni pozostają klasyfikowane na podstawie typu. `sett` bez
+wartości `smoothness` jest oznaczany jako ostrożna/umiarkowana nawierzchnia,
+ponieważ materiał jest znany, ale jego stan nie został potwierdzony. Nie jest
+blokowany przez filtr piasku, żwiru i miękkiego podłoża. Znane typy utwardzonej
+nawierzchni, takie jak asfalt lub `paving_stones`, pozostają klasyfikowane na
+podstawie typu, chyba że mają jawnie złą wartość `smoothness`. Dopiero brak
+wartości `surface` oznacza typ nieznany. Użytkownik może jawnie włączyć parametr
 `allow_unknown_surfaces`, ale wynik musi wtedy pokazać ostrzeżenie o odcinkach
 bez potwierdzonego stanu nawierzchni.
+
+Interfejs planera domyślnie może pokazać trasę alternatywną z ostrzeżeniem,
+jeżeli nie istnieje trasa spełniająca wszystkie ograniczenia. Taki fallback
+może złagodzić limit nachylenia do 12% oraz dopuścić schody, ale nie omija
+filtra nieznanej nawierzchni ani wybranych filtrów nawierzchni. Wynik jest
+oznaczany jako alternatywny i nie może być prezentowany jako trasa bez barier.
+Użytkownik może wyłączyć tę opcję, aby wymagać wyłącznie trasy ścisłej.
 
 ## Weryfikacja kandydata A/B
 
